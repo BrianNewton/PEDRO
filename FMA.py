@@ -378,14 +378,54 @@ def FMA():
         sample_data = values['-SAMPLES-']
         FMA_data = values['-FMA-']
 
-        samples, FMA = input_data(sample_data, FMA_data)
-        process_samples(samples, FMA)
-        obtain_peaks(samples, FMA)
-        standardize(samples, FMA)
-        peak_areas(samples)
-        m, b, R2 = linear_model(samples, FMA)
-        concentrations(samples, m, b)
-        out = outputData(samples, m, b, R2)
+        try:
+            samples, FMA = input_data(sample_data, FMA_data)
+        except:
+            window.close()
+            raise Exception("Error reading data files, ensure they're formatted correctly")
+
+        try:
+            process_samples(samples, FMA)
+        except:
+            window.close()
+            raise Exception("Error processing samples: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:
+            obtain_peaks(samples, FMA)
+        except:
+            window.close()
+            raise Exception("Error obtaining peaks: Ensure peak bounds were chosen correctly")
+
+        try:
+            standardize(samples, FMA)
+        except:
+            window.close()
+            raise Exception("Error standardizing results: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:
+            peak_areas(samples)
+        except:
+            window.close()
+            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:
+            m, b, R2 = linear_model(samples, FMA)
+        except:
+            window.close()
+            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:
+            concentrations(samples, m, b)
+        except:
+            window.close()
+            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:
+            out = outputData(samples, m, b, R2) 
+        except:
+            window.close()
+            raise Exception("Error outputting results: Ensure chosen location is valid")
+
     window.close()
     return 0
 

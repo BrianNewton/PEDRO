@@ -348,6 +348,7 @@ def linear_model(fluxes, Vol, CO2_or_CH4):
 
 # calculates cut offsets for the sake of reporting
 def offsets(fluxes):
+
     for flux in fluxes:
 
         flux.max_time = max(flux.pruned_times)
@@ -457,8 +458,6 @@ def outputData(fluxes, site, date, CO2_or_CH4, Vol):
 
 def LICOR():
 
-    choices = ('Cylinder', 'Box')
-
     layout_cylinder = [[sg.Text("Radius (m):", size=(14, 1), background_color='#DF954A'), sg.InputText(key='-RADIUS-')],
           [sg.Text("Height (m):", size=(14, 1), background_color='#DF954A'), sg.InputText(key='-HEIGHT-')]]
 
@@ -491,19 +490,16 @@ def LICOR():
         event, values = window.read()
         # End program if user closes window or
         # presses the OK button
-        print(event, values)
         if event == "Submit":
             break
         elif event == "Cancel" or event == sg.WIN_CLOSED:
             cancelled = True
             break
         elif event in '-SQUARE-':
-            print("here2")
             window[f'-COL1-'].update(visible=False)
             window[f'-COL2-'].update(visible=True)
             window[f'-SQUARE-'].update(True)
         elif event in '-CIRCLE-':
-            print("here")
             window[f'-COL2-'].update(visible=False)
             window[f'-COL1-'].update(visible=True)
             window[f'-CIRCLE-'].update(True)
@@ -525,11 +521,37 @@ def LICOR():
         site = values['-SITE-']
         date = values['-DATE-']
 
-        fluxes = input_data(field_data, licor_data, CO2_or_CH4)
-        prune(fluxes)
-        linear_model(fluxes, vol, CO2_or_CH4)
-        offsets(fluxes)
-        out = outputData(fluxes, site, date, CO2_or_CH4, vol)
+
+        try:
+            fluxes = input_data(field_data, licor_data, CO2_or_CH4)
+        except Exception as e:
+            window.close()
+            raise Exception("Error parsing data files: Ensure your field data and LICOR data are formatted correctly")
+        
+        try:
+            prune(fluxes)
+        except Exception as e:
+            window.close()
+            raise Exception("Error pruning data: Verify times are correct in field data file")
+
+        try:
+            linear_model(fluxes, vol, CO2_or_CH4)
+        except Exception as e:
+            window.close()
+            raise Exception("Error generating linear model: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+
+        try:  
+            offsets(fluxes)
+        except Exception as e:
+            window.close()
+            raise Exception("Error generating linear offsets: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
+        
+        try:
+            out = outputData(fluxes, site, date, CO2_or_CH4, vol)
+        except Exception as e:
+            window.close()
+            raise Exception("Error outputting data: Ensure the chosen location is valid")
+
     window.close()
     return 0
 
@@ -575,5 +597,3 @@ if __name__ == "__main__":
     linear_model(fluxes, Vol, CO2_or_CH4)
     offsets(fluxes)
     out = outputData(fluxes, site, date, CO2_or_CH4, Vol)
-
-    x = input("Finished! Results have been outputted to " + out + ". Press enter to exit: ")

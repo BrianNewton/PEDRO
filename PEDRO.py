@@ -1,7 +1,23 @@
 from FMA import FMA
 from LICOR import LICOR
-#import GC
+from GC import GC
 import PySimpleGUI as sg
+
+def error_screen(e):
+    layout = [[sg.Text("Error", font='Any 48', background_color="#7A1E74")],
+    [sg.Text("The following error occured:", background_color="#7A1E74")],
+    [sg.Text(background_color="#7A1E74")],
+    [sg.Text(e, background_color="#7A1E74")],
+    [sg.Text(background_color="#7A1E74")],
+    [sg.Button("Go back")]]
+
+    window = sg.Window("ERROR", layout, margins=(60, 20), background_color = '#7A1E74')
+    while True:
+        event, values = window.read()
+        if event == "Go back" or event == sg.WIN_CLOSED:
+            break
+
+    window.close()
 
 layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Text("\"Peatland Equipment Data Re-Organizer\"", background_color="#DF4A4A")],
@@ -20,13 +36,26 @@ while True:
         break
     elif event == "LICOR":
         window.Hide()
-        LICOR()
+        try:
+            LICOR()
+        except Exception as e:
+            error_screen(e)
         window.UnHide()
     elif event == "FMA":
         window.Hide()
-        FMA()
+        try:
+            FMA()
+        except Exception as e:
+            error_screen(e)
         window.UnHide()
     elif event == "GC":
-        GC()
+        window.Hide()
+        try:
+            GC()
+        except Exception as e:
+            error_screen(e)
+        window.UnHide()
 
 window.close()
+
+
