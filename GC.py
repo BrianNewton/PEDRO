@@ -7,20 +7,77 @@ import pandas as pd
 import tkinter
 import tkinter.filedialog
 import PySimpleGUI as sg
+import copy
         
+
+def process_times(intervals):
+
+    time_regex = r"([\d.]*)(min|sec)"
+
+    times_dict = {}
+    times_list = []
+
+    times = intervals.split(',')
+    for time in times:
+        time = time.strip(' \t\n\r')
+        match = re.search(time_regex, time)
+        if match:
+            print(match[0])
+            times_dict[match[0]] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
+            if match[2] == 'min':
+                times_list.append(float(match[1]))
+            if match[2] == 'sec':
+                times_list.append(float(match[1])*60)
+        else:
+            raise Exception("Error parsing time intervals, ensure they were entered correctly")
+    print(times_dict)
+    return times_dict, times_list
 
 def get_PDFs(folder):
     PDFs = glob.glob(folder + "/*.pdf")
     return PDFs
 
 
-def process_PDFs(samples, standards, sample_rows, PDFs, window):
+def process_date(date):
+
+    date_regex = r"([a-zA-Z]+)[\s-]?(\d+)[,sth]*[\s-]?(\d{2,4})?"
+
+    months = {'jan' : 'January', 'january' : 'January',
+            'feb': 'February', 'february': 'February',
+            'mar': 'March', 'march': 'March',
+            'apr' : 'April', 'april': 'April',
+            'may': 'May',
+            'jun': 'June', 'june': 'June',
+            'jul': 'July', 'july': 'July',
+            'aug': 'August', 'august': 'August',
+            'sep': 'September', 'sept': 'September', 'september': 'September',
+            'oct': 'October', 'october': 'October',
+            'nov': 'November', 'november': 'November',
+            'dec': 'December', 'december': 'December'}
+
+    match = re.search(date_regex, str(date))
+
+    if match:
+        if str(match[1]).lower() in months:
+            month = months[match[1].lower()]
+            day = match[2]
+            year = match[3]
+            return month + " " + day + (", " + year if year else ", 2021")
+        else:
+            return date
+    else:
+        return date
+
+
+def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
     counter = 0
     row_index = 1
     standard_regex = r"(\d*)\s?ppm"
-    sample_regex = r"([SHLC\d]*)-*\s*([\d.]*\s?min)"
+    sample_regex = r"([SHLC\d]*)-*\s*([\d.]*[\s-]*min)"
     date_ran_regex = r"[a-zA-Z]{3}\d{2}"
     concentration_regex = r"-?\d*\.\d*"
+
+    print(times_dict)
 
     for file in PDFs:
         event, values = window.read(timeout=10)
@@ -64,7 +121,7 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window):
                         standards[standard]['File'].append(file)
                 
 
-                if re.search (sample_regex, row['Sample Name']):
+                if re.search(sample_regex, row['Sample Name']):
                     sample_name = re.search(sample_regex, row['Sample Name'])[1]
                     if sample_name not in sample_rows:
                         sample_rows[sample_name] = row_index
@@ -72,29 +129,35 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window):
 
 
                     sample_time = re.search(sample_regex, row['Sample Name'])[2].replace(" ", "")
-                    date = row['Sample ID']
 
+                    date = process_date(row['Sample ID'])
                     if date in samples:
                         if sample_name in samples[date]:
                             samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
                             samples[date][sample_name][sample_time]['File'] = file
                         else:
-                            samples[date][sample_name] = {'0min' : {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''},
-                                                            '3.5min': {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''},
-                                                            '7min': {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}}
+                            if times_dict:
+                                samples[date][sample_name] = copy.deepcopy(times_dict)
+                            else:
+                                samples[date][sample_name] = {}
+                                samples[date][sample_name][sample_time] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
+
                             samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
                             samples[date][sample_name][sample_time]['File'] = file
                     else:
-                        samples[date] = {sample_name: {'0min' : {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''},
-                                                            '3.5min': {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''},
-                                                            '7min': {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}}}
+                        if times_dict:
+                            samples[date] = {sample_name: copy.deepcopy(times_dict)}
+                        else:
+                            samples[date] = {}
+                            samples[date][sample_name] = {}
+                            samples[date][sample_name][sample_time] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
+                       
                         samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
                         samples[date][sample_name][sample_time]['File'] = file
     return samples, standards, sample_rows
 
 
-
-def output_data(samples, standards, sample_rows):
+def output_data(samples, standards, sample_rows, times_dict):
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
 
@@ -129,9 +192,16 @@ def output_data(samples, standards, sample_rows):
         worksheet.write_row(0, 0, ["Sample Name", "Sample Time", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"])
         for sample_name in samples[date]:
             sample = samples[date][sample_name]
-            worksheet.write_row(sample_rows[sample_name], 0, [sample_name, "0min", sample['0min']['Methane'], sample['0min']['Carbon Dioxide'], sample['0min']['Oxygen'], sample['0min']['Nitrogen'], sample['0min']['Nitrous Oxide'], sample['0min']['File']])
-            worksheet.write_row(sample_rows[sample_name] + 1, 1, ["3.5min", sample["3.5min"]['Methane'], sample["3.5min"]['Carbon Dioxide'], sample["3.5min"]['Oxygen'], sample["3.5min"]['Nitrogen'], sample["3.5min"]['Nitrous Oxide'], sample['3.5min']['File']])
-            worksheet.write_row(sample_rows[sample_name] + 2, 1, ["7min", sample["7min"]['Methane'], sample["7min"]['Carbon Dioxide'], sample["7min"]['Oxygen'], sample["7min"]['Nitrogen'], sample["7min"]['Nitrous Oxide'], sample['7min']['File']])
+            if times_dict:
+                i = 0
+                for time in times_dict:
+                    worksheet.write_row(sample_rows[sample_name] + i, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']])
+                    i += 1
+            else:
+                for time in sample:
+                    worksheet.write_row(sample_rows[sample_name] + i, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']])
+                    i += 1
+
     workbook.close()
     return out
 
@@ -144,9 +214,14 @@ def GC():
                     '5ppm': {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []}, 
                     '50ppm': {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []}}
     
+    layout_flux = [[sg.Text("Enter time intervals:", size=(15,1), background_color='#0680BF'), sg.InputText(key='-TIMES-')],
+        [sg.Text("Eg. \"0min, 3.5min, 7min\"", background_color='#0680BF')]]
+
     layout = [[sg.Text('GC Data Processing Tool', font='Any 36', background_color='#0680BF')],
         [sg.Text("", background_color='#0680BF')],
         [sg.Text('PDF files folder:', size=(15, 1), background_color='#0680BF'), sg.Input(key='-FOLDER-'), sg.FolderBrowse()],
+        [sg.Checkbox("Calculate flux?", key="-FLUX-", background_color='#0680BF', enable_events=True)],
+        [sg.Column(layout_flux,  key='-COL1-', visible=False, background_color='#0680BF'), sg.Column([[]], key='-COL2-', visible=True, background_color='#0680BF' )],
         [sg.Text("", background_color='#0680BF')],
         [sg.Submit(), sg.Cancel()]]
 
@@ -166,20 +241,37 @@ def GC():
         print(event, values)
         if event == "Submit":
             break
+        elif event == '-FLUX-':
+            if values['-FLUX-']:
+                window[f'-COL2-'].update(visible=False)
+                window[f'-COL1-'].update(visible=True)
+            else:
+                window[f'-COL2-'].update(visible=True)
+                window[f'-COL1-'].update(visible=False)
         elif event == "Cancel" or event == sg.WIN_CLOSED:
             cancelled = True
             break
 
     
     if cancelled == False:
-        folder = values['-FOLDER-']
 
-        PDFs = get_PDFs(folder)
+        try:
+            folder = values['-FOLDER-']
 
-        if len(PDFs) == 0:
-            raise Exception("Error: No PDFs found at selected location")
+            if values['-FLUX-']:
+                times_dict, times_list = process_times(values['-TIMES-'])
+            else:
+                times_dict = ''
 
-        BAR_MAX = len(PDFs)
+            PDFs = get_PDFs(folder)
+
+            if len(PDFs) == 0:
+                raise Exception("Error: No PDFs found at selected location")
+
+            BAR_MAX = len(PDFs)
+        except Exception as e:
+            window.close()
+            raise Exception("Error in inputted information")
 
         layout = [[sg.Text('GC Data Processing Tool', font='Any 36', background_color='#0680BF')],
             [sg.Text("Processing... This may take a few minutes", background_color='#0680BF')],
@@ -190,15 +282,17 @@ def GC():
         window = sg.Window("GC", layout, margins = (80, 50), background_color='#0680BF')
         
         try:
-            samples, stsandards, sample_rows = process_PDFs(samples, standards, sample_rows, PDFs, window)
-        except:
+            samples, standards, sample_rows = process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict)
+        except Exception as e:
             window.close()
+            print(e)
             raise Exception("Error processing PDFs: ensure MARIA.isr report format is used")
 
         try:
-            out = output_data(samples, standards, sample_rows)
-        except:
+            out = output_data(samples, standards, sample_rows, times_dict)
+        except Exception as e:
             window.close()
+            print(e)
             raise Exception("Error outputting results: ensure chosen location is valid")
 
     window.close()
