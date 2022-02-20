@@ -510,17 +510,20 @@ def LICOR():
         else:
             CO2_or_CH4 = 'ch4'
 
-        field_data = values['-FIELD-']
-        licor_data = values['-LICOR-']
+        try:
+            field_data = values['-FIELD-']
+            licor_data = values['-LICOR-']
 
-        if values['-CIRCLE-']:
-            vol = float(values['-RADIUS-']) ** 2 * math.pi * float(values['-HEIGHT-'])
-        else:
-            vol = float(values['-HEIGHT-']) * float(values['-WIDTH-']) * float(values['-LENGTH-'])
+            if values['-CIRCLE-']:
+                vol = float(values['-RADIUS-']) ** 2 * math.pi * float(values['-HEIGHT-'])
+            else:
+                vol = float(values['-HEIGHT-']) * float(values['-WIDTH-']) * float(values['-LENGTH-'])
 
-        site = values['-SITE-']
-        date = values['-DATE-']
-
+            site = values['-SITE-']
+            date = values['-DATE-']
+        except Exception as e:
+            window.close()
+            raise Exception("Error in inputted information")
 
         try:
             fluxes = input_data(field_data, licor_data, CO2_or_CH4)

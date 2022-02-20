@@ -20,9 +20,9 @@ def error_screen(e):
     window.close()
 
 layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
-    [sg.Text("\"Peatland Equipment Data Re-Organizer\"", background_color="#DF4A4A")],
+    [sg.Text("\"Peatland Equipment Data Re-Organizer\"", font ='italic', background_color="#DF4A4A")],
     [sg.Text(background_color="#DF4A4A")],
-    [sg.Text("Select an option bellow:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC"), sg.Button("IRGA (coming soon!)")]]
+    [sg.Text("Select an option bellow:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC (unstable)"), sg.Button("IRGA (coming soon!)")]]
 
 # Create the window
 window = sg.Window("PEDRO", layout, margins=(60, 20), background_color="#DF4A4A")
@@ -48,7 +48,7 @@ while True:
         except Exception as e:
             error_screen(e)
         window.UnHide()
-    elif event == "GC":
+    elif event == "GC (unstable)":
         window.Hide()
         try:
             GC()
