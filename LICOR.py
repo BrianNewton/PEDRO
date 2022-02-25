@@ -611,6 +611,6 @@ if __name__ == "__main__":
 
     fluxes = input_data(field_data, licor_data, CO2_or_CH4)
     prune(fluxes)
-    linear_model(fluxes, Vol, CO2_or_CH4)
+    linear_regression(fluxes, Vol, CO2_or_CH4)
     offsets(fluxes)
     out = outputData(fluxes, site, date, CO2_or_CH4, Vol)

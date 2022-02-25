@@ -7,6 +7,7 @@ import pandas as pd
 import tkinter
 import tkinter.filedialog
 import PySimpleGUI as sg
+from LICOR import linear_regression
 import copy
         
 
@@ -72,6 +73,7 @@ def process_date(date):
 def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
     counter = 0
     row_index = 1
+    longest_file_name = 0
     standard_regex = r"(\d*)\s?ppm"
     sample_regex = r"([SHLC\d]*)-*\s*([\d.]*[\s-]*min)"
     date_ran_regex = r"[a-zA-Z]{3}\d{2}"
@@ -80,6 +82,10 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
     print(times_dict)
 
     for file in PDFs:
+
+        if len(file) > longest_file_name:
+            longest_file_name = len(file)
+
         event, values = window.read(timeout=10)
         window['-PROG-'].update(counter + 1)
         counter += 1
@@ -154,53 +160,110 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
                        
                         samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
                         samples[date][sample_name][sample_time]['File'] = file
-    return samples, standards, sample_rows
+    return samples, standards, sample_rows, longest_file_name
 
 
-def output_data(samples, standards, sample_rows, times_dict):
+def fluxes(samples, times_dict):
+    time_regex = r"([\d.]*)(min|sec)"
+    gasses = ['Methane', 'Carbon Dioxide', 'Oxygen', 'Nitrogen', 'Nitrous Oxide']
+
+    for date in samples:
+        for sample_name in samples[date]:
+            samples[date][sample_name]["RoC (ppm/min)"] = {}
+            samples[date][sample_name]["R2"] = {}
+            for gas in gasses:
+                X = []
+                Y = []
+                for time in times_dict:
+                    if samples[date][sample_name][time][gas]:
+                        minutes = re.search(time_regex, time)[1]
+                        X.append(float(minutes))
+                        Y.append(float(samples[date][sample_name][time][gas]))
+                print(X)
+                print(Y)
+                try:
+                    m, b, R2 = linear_regression(X, Y)
+                    samples[date][sample_name]["RoC (ppm/min)"][gas] = m
+                    samples[date][sample_name]["R2"][gas] = R2
+                except:
+                    samples[date][sample_name]["RoC (ppm/min)"][gas] = ''
+                    samples[date][sample_name]["R2"][gas] = ''
+                
+
+
+def output_data(samples, standards, sample_rows, times_dict, longest_file_name):
+    
+
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
+
+    title_format = workbook.add_format()
+    title_format.set_bg_color('#65BDFB')
+
+    data_format = {}
+    flux_format = {}
+
+    data_format[1] = workbook.add_format()
+    data_format[1].set_bg_color('#A3D8FC')
+    flux_format[1] = workbook.add_format({'bold': True})
+    flux_format[1].set_bg_color('#A3D8FC')
+
+    data_format[0] = workbook.add_format()
+    data_format[0].set_bg_color('#C2E5FD')
+    flux_format[0] = workbook.add_format({'bold': True})
+    flux_format[0].set_bg_color('#C2E5FD')
 
     gasses = ['Methane', 'Carbon Dioxide', 'Oxygen', 'Nitrogen', 'Nitrous Oxide']
     worksheet = workbook.add_worksheet("Standards")
     worksheet.freeze_panes(1, 0)
-    worksheet.write_row(0, 0, ["Standard", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"])
-    i = 1
+    worksheet.write_row(0, 0, ["Standard", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"], title_format)
+    row = 1
+    data_format_num = 1
     for standard in standards:
-        worksheet.write(i, 0, standard)
-        for k in range(len(gasses)):
-            worksheet.write_column(i, k + 1, standards[standard][gasses[k]])
-        worksheet.write_column(i, len(gasses) + 1, standards[standard]['File'])
-        i += len(standards[standard][gasses[0]])
+        #worksheet.write(i, 0, standard, data_format[data_format_num])
+        for k in range(len(standards[standard]['Methane'])):
+            worksheet.write_row(row , 0, [standard, standards[standard]['Methane'][k], standards[standard]['Carbon Dioxide'][k], standards[standard]['Oxygen'][k], standards[standard]['Nitrogen'][k], standards[standard]['Nitrous Oxide'][k], standards[standard]['File'][k]], data_format[data_format_num])
+        #worksheet.write_column(i, len(gasses) + 1, standards[standard]['File'], data_format[data_format_num])
+            row += 1
+        data_format_num = 1 - data_format_num
+    
     worksheet.set_column(0, 0, len("standard"))
     worksheet.set_column(1, 1, len("Methane (ppm)"))
     worksheet.set_column(2, 2, len("Carbon Dioxide (ppm)"))
     worksheet.set_column(3, 3, len("Oxygen (%)"))
     worksheet.set_column(4, 4, len("Nitrogen (%)"))
     worksheet.set_column(5, 5, len("Nitrous Oxide (ppm)"))
+    worksheet.set_column(6, 6, longest_file_name)
 
     for date in samples:
         worksheet = workbook.add_worksheet(str(date))
+        row = 1
+        data_format_num = 1
         worksheet.freeze_panes(1, 0)
         worksheet.set_column(0, 0, len("Sample Name"))
-        worksheet.set_column(1, 1, len("Sample Time"))
+        worksheet.set_column(1, 1, len("Sample Time   "))
         worksheet.set_column(2, 2, len("Methane (ppm)"))
         worksheet.set_column(3, 3, len("Carbon Dioxide (ppm)"))
         worksheet.set_column(4, 4, len("Oxygen (%)"))
         worksheet.set_column(5, 5, len("Nitrogen (%)"))
         worksheet.set_column(6, 6, len("Nitrous Oxide (ppm)"))
-        worksheet.write_row(0, 0, ["Sample Name", "Sample Time", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"])
+        worksheet.set_column(7,7, longest_file_name)
+        worksheet.write_row(0, 0, ["Sample Name", "Sample Time", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"], title_format)
         for sample_name in samples[date]:
             sample = samples[date][sample_name]
             if times_dict:
-                i = 0
                 for time in times_dict:
-                    worksheet.write_row(sample_rows[sample_name] + i, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']])
-                    i += 1
+                    worksheet.write_row(row, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']], data_format[data_format_num])
+                    row += 1
+                worksheet.write_row(row, 0, [sample_name, "RoC (ppm/min)", sample["RoC (ppm/min)"]['Methane'], sample["RoC (ppm/min)"]['Carbon Dioxide'], sample["RoC (ppm/min)"]['Oxygen'], sample["RoC (ppm/min)"]['Nitrogen'], sample["RoC (ppm/min)"]['Nitrous Oxide'], ''], flux_format[data_format_num])
+                row += 1
+                worksheet.write_row(row, 0, [sample_name, "R2", sample["R2"]['Methane'], sample["R2"]['Carbon Dioxide'], sample["R2"]['Oxygen'], sample["R2"]['Nitrogen'], sample["R2"]['Nitrous Oxide'], ''], flux_format[data_format_num])
+                row += 1
             else:
                 for time in sample:
-                    worksheet.write_row(sample_rows[sample_name] + i, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']])
-                    i += 1
+                    worksheet.write_row(row, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']], data_format[data_format_num])
+                    row += 1
+            data_format_num = 1 - data_format_num
 
     workbook.close()
     return out
@@ -282,14 +345,17 @@ def GC():
         window = sg.Window("GC", layout, margins = (80, 50), background_color='#0680BF')
         
         try:
-            samples, standards, sample_rows = process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict)
+            samples, standards, sample_rows, longest_file_name = process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict)
         except Exception as e:
             window.close()
             print(e)
             raise Exception("Error processing PDFs: ensure MARIA.isr report format is used")
 
+        if values['-FLUX-']:
+            fluxes(samples, times_dict)
+
         try:
-            out = output_data(samples, standards, sample_rows, times_dict)
+            out = output_data(samples, standards, sample_rows, times_dict, longest_file_name)
         except Exception as e:
             window.close()
             print(e)
