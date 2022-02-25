@@ -25,6 +25,7 @@ import tkinter
 import tkinter.filedialog
 from os.path import  join
 import PySimpleGUI as sg
+import traceback
 
 
 
@@ -192,6 +193,8 @@ def obtain_peaks(samples, FMA):
     i = 0
     fig, ax = plt.subplots()
     fig.set_size_inches(6,6)
+    line_L = draggable_lines(ax, samples[i].start_time, plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].end_time, plt.gca().get_ylim())     # right draggable boundary line
     cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid))   # connect key press event
     plt.grid(True)
     plt.ion()
@@ -366,7 +369,6 @@ def FMA():
         event, values = window.read()
         # End program if user closes window or
         # presses the OK button
-        print(event, values)
         if event == "Submit":
             break
         elif event == "Cancel" or event == sg.WIN_CLOSED:
@@ -379,51 +381,67 @@ def FMA():
         FMA_data = values['-FMA-']
 
         try:
+            print("Reading input files")
             samples, FMA = input_data(sample_data, FMA_data)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error reading data files, ensure they're formatted correctly")
 
         try:
+            print("Processing data")
             process_samples(samples, FMA)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error processing samples: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:
+            print("Obtaining peak bounds")
             obtain_peaks(samples, FMA)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error obtaining peaks: Ensure peak bounds were chosen correctly")
 
         try:
+            print("Trimming data")
             standardize(samples, FMA)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error standardizing results: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:
+            print("Calculating peak areas")
             peak_areas(samples)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:
+            print("Generating linear model")
             m, b, R2 = linear_model(samples, FMA)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:
+            print("Calculating concentrations")
             concentrations(samples, m, b)
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:
+            print("Outputting data")
             out = outputData(samples, m, b, R2) 
         except:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error outputting results: Ensure chosen location is valid")
 
     window.close()

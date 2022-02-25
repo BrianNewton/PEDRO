@@ -1,6 +1,7 @@
 from FMA import FMA
 from LICOR import LICOR
 from GC import GC
+import traceback
 import PySimpleGUI as sg
 
 def error_screen(e):
@@ -37,22 +38,28 @@ while True:
     elif event == "LICOR":
         window.Hide()
         try:
+            print("===== LICOR =====")
             LICOR()
         except Exception as e:
+            print(traceback.format_exc())
             error_screen(e)
         window.UnHide()
     elif event == "FMA":
         window.Hide()
         try:
+            print("===== FMA =====")
             FMA()
         except Exception as e:
+            print(traceback.format_exc())
             error_screen(e)
         window.UnHide()
     elif event == "GC (unstable)":
         window.Hide()
         try:
+            print("===== GC =====")
             GC()
         except Exception as e:
+            print(traceback.format_exc())
             error_screen(e)
         window.UnHide()
 

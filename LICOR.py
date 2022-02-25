@@ -21,6 +21,7 @@ import tkinter
 import tkinter.filedialog
 import xlsxwriter
 import PySimpleGUI as sg
+import traceback
 
 
 # draggable lines for user cuts
@@ -537,42 +538,49 @@ def LICOR():
             date = values['-DATE-']
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error in inputted information")
 
         try:
             fluxes = input_data(field_data, licor_data, CO2_or_CH4)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error parsing data files: Ensure your field data and LICOR data are formatted correctly")
         
         try:
             prune(fluxes)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error pruning data: Verify times are correct in field data file")
 
         try:
             flux_calculation(fluxes, surface_area, CO2_or_CH4)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error generating linear model: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
         try:  
             offsets(fluxes)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error generating linear offsets: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
         
         try:
             out = outputData(fluxes, site, date, CO2_or_CH4, surface_area)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error outputting data: Ensure the chosen location is valid")
 
     window.close()
     return 0
 
 
+# Used on its own
 if __name__ == "__main__":
 
     os.system('cls' if os.name == 'nt' else 'clear')

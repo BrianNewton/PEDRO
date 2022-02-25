@@ -7,6 +7,7 @@ import pandas as pd
 import tkinter
 import tkinter.filedialog
 import PySimpleGUI as sg
+import traceback
 from LICOR import linear_regression
 import copy
         
@@ -23,7 +24,6 @@ def process_times(intervals):
         time = time.strip(' \t\n\r')
         match = re.search(time_regex, time)
         if match:
-            print(match[0])
             times_dict[match[0]] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
             if match[2] == 'min':
                 times_list.append(float(match[1]))
@@ -31,7 +31,6 @@ def process_times(intervals):
                 times_list.append(float(match[1])*60)
         else:
             raise Exception("Error parsing time intervals, ensure they were entered correctly")
-    print(times_dict)
     return times_dict, times_list
 
 def get_PDFs(folder):
@@ -78,8 +77,6 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
     sample_regex = r"([SHLC\d]*)-*\s*([\d.]*[\s-]*min)"
     date_ran_regex = r"[a-zA-Z]{3}\d{2}"
     concentration_regex = r"-?\d*\.\d*"
-
-    print(times_dict)
 
     for file in PDFs:
 
@@ -179,8 +176,6 @@ def fluxes(samples, times_dict):
                         minutes = re.search(time_regex, time)[1]
                         X.append(float(minutes))
                         Y.append(float(samples[date][sample_name][time][gas]))
-                print(X)
-                print(Y)
                 try:
                     m, b, R2 = linear_regression(X, Y)
                     samples[date][sample_name]["RoC (ppm/min)"][gas] = m
@@ -301,7 +296,6 @@ def GC():
         event, values = window.read()
         # End program if user closes window or
         # presses the OK button
-        print(event, values)
         if event == "Submit":
             break
         elif event == '-FLUX-':
@@ -319,6 +313,7 @@ def GC():
     if cancelled == False:
 
         try:
+            print("Reading files")
             folder = values['-FOLDER-']
 
             if values['-FLUX-']:
@@ -334,6 +329,7 @@ def GC():
             BAR_MAX = len(PDFs)
         except Exception as e:
             window.close()
+            print(traceback.format_exc())
             raise Exception("Error in inputted information")
 
         layout = [[sg.Text('GC Data Processing Tool', font='Any 36', background_color='#0680BF')],
@@ -345,20 +341,22 @@ def GC():
         window = sg.Window("GC", layout, margins = (80, 50), background_color='#0680BF')
         
         try:
+            print("Processing PDFs")
             samples, standards, sample_rows, longest_file_name = process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict)
         except Exception as e:
             window.close()
-            print(e)
+            print(traceback.format_exc())
             raise Exception("Error processing PDFs: ensure MARIA.isr report format is used")
 
         if values['-FLUX-']:
             fluxes(samples, times_dict)
 
         try:
+            print("Outputting results")
             out = output_data(samples, standards, sample_rows, times_dict, longest_file_name)
         except Exception as e:
             window.close()
-            print(e)
+            print(traceback.format_exc())
             raise Exception("Error outputting results: ensure chosen location is valid")
 
     window.close()
