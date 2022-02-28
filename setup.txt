@@ -1,0 +1,2 @@
+chmod +x PEDRO
+xattr -d -r com.apple.quarantine *
