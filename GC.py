@@ -1,16 +1,21 @@
+from math import nan
+from math import isnan
 import os
 import glob
+from tracemalloc import start
 import xlsxwriter
 import re
 import tabula
 import pandas as pd
 import tkinter
 import tkinter.filedialog
+from pdfminer import high_level
 import PySimpleGUI as sg
 import traceback
 from LICOR import linear_regression
 import copy
         
+from csv import DictWriter
 
 def process_times(intervals):
 
@@ -36,6 +41,14 @@ def process_times(intervals):
 def get_PDFs(folder):
     PDFs = glob.glob(folder + "/*.pdf")
     return PDFs
+
+
+def process_regex(naming_regex):
+    regex = naming_regex.replace('s', '\\D+')
+    regex = regex.replace('d', '\\d+(?:\\.\\d+)?')
+    regex = regex.replace('x', '.+')
+    regex = regex.replace('-', '[\\s_-]+')
+    return regex, naming_regex.count('(')
 
 
 def process_date(date):
@@ -66,10 +79,14 @@ def process_date(date):
         else:
             return date
     else:
-        return date
+        if isinstance(date, float):
+            if isnan(date):
+                return 'empty'
+        else:
+            return str(date)
 
 
-def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
+def process_PDFs(samples, standards, sample_rows, PDFs, window, regex, count):
     counter = 0
     row_index = 1
     longest_file_name = 0
@@ -77,8 +94,18 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
     sample_regex = r"([SHLC\d]*)-*\s*([\d.]*[\s-]*min)"
     date_ran_regex = r"[a-zA-Z]{3}\d{2}"
     concentration_regex = r"-?\d*\.\d*"
+    dates = []
 
     for file in PDFs:
+
+        order_check_re = r"Methane"
+        order_check = high_level.extract_text(file, '', 0)
+        order_check_match = re.search(order_check_re, order_check)
+
+        if order_check_match:
+            order = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4}
+        else:
+            order = {0: 0, 1: 2, 2: 3, 3: 1, 4: 4}
 
         if len(file) > longest_file_name:
             longest_file_name = len(file)
@@ -98,6 +125,7 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
 
         processed_tables = []
         processed_tables.append(tables[0])
+        
 
         merged = [0]
         for i in range(len(tables)):
@@ -119,75 +147,108 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict):
                 if re.search(standard_regex, row['Sample Name']):
                     standard = row['Sample Name'].replace(" ", "")
                     #standard = int(re.search(standard_regex, row['Sample Name'])[1])
-                    standards[standard][gasses[i]].append(float(re.search(concentration_regex, row['Conc. Unit'])[0]))
+                    standards[standard][gasses[order[i]]].append(float(re.search(concentration_regex, row['Conc. Unit'])[0]))
                     if gasses[i] == 'Methane':
                         standards[standard]['File'].append(file)
                 
-
-                if re.search(sample_regex, row['Sample Name']):
-                    sample_name = re.search(sample_regex, row['Sample Name'])[1]
-                    if sample_name not in sample_rows:
-                        sample_rows[sample_name] = row_index
-                        row_index += 3
-
-
-                    sample_time = re.search(sample_regex, row['Sample Name'])[2].replace(" ", "")
-
+                else:
                     date = process_date(row['Sample ID'])
-                    if date in samples:
-                        if sample_name in samples[date]:
-                            samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
-                            samples[date][sample_name][sample_time]['File'] = file
-                        else:
-                            if times_dict:
-                                samples[date][sample_name] = copy.deepcopy(times_dict)
-                            else:
-                                samples[date][sample_name] = {}
-                                samples[date][sample_name][sample_time] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
 
-                            samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
-                            samples[date][sample_name][sample_time]['File'] = file
-                    else:
-                        if times_dict:
-                            samples[date] = {sample_name: copy.deepcopy(times_dict)}
-                        else:
+                    if date.lower() != 'blank':
+                        if date not in dates:
+                            dates.append(date)
+                        if date not in samples:
                             samples[date] = {}
-                            samples[date][sample_name] = {}
-                            samples[date][sample_name][sample_time] = {'Methane': '', 'Carbon Dioxide': '', 'Oxygen': '', 'Nitrogen': '', 'Nitrous Oxide': '', 'File': ''}
-                       
-                        samples[date][sample_name][sample_time][gasses[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
-                        samples[date][sample_name][sample_time]['File'] = file
-    return samples, standards, sample_rows, longest_file_name
+                        current_sample = samples[date]
+                        sample_name = re.search(regex, row['Sample Name'])
+                        if sample_name:
+                            for j in range(count):
+                                if sample_name[j + 1] in current_sample:
+                                    current_sample = current_sample[sample_name[j + 1]]
+                                else:
+                                    if j + 1 == count:
+                                        current_sample[sample_name[j + 1]] = ['', '', '', '', '', '']
+                                        current_sample = current_sample[sample_name[j + 1]]
+                                    else:
+                                        current_sample[sample_name[j + 1]] = {}
+                                        current_sample = current_sample[sample_name[j + 1]]
+                            
+                            current_sample[order[i]] = float(re.search(concentration_regex, row['Conc. Unit'])[0])
+                            current_sample[5] = file
+    return samples, standards, sample_rows, longest_file_name, dates
 
 
-def fluxes(samples, times_dict):
-    time_regex = r"([\d.]*)(min|sec)"
-    gasses = ['Methane', 'Carbon Dioxide', 'Oxygen', 'Nitrogen', 'Nitrous Oxide']
 
-    for date in samples:
-        for sample_name in samples[date]:
-            samples[date][sample_name]["RoC (ppm/min)"] = {}
-            samples[date][sample_name]["R2"] = {}
-            for gas in gasses:
+
+def flux_helper(val, count, current):
+    if current > count:
+        for k, v in val.items():
+            flux_helper(v, count, current + 1)
+    
+    else:
+        for k, v in val.items():
+            v["RoC (ppm/min)"] = []
+            v["R2"] = []
+            for i in range(0, 5):
                 X = []
                 Y = []
-                for time in times_dict:
-                    if samples[date][sample_name][time][gas]:
-                        minutes = re.search(time_regex, time)[1]
-                        X.append(float(minutes))
-                        Y.append(float(samples[date][sample_name][time][gas]))
+                for time in v:
+                    if time == "RoC (ppm/min)" or time == "R2":
+                        continue
+                    
+                    X.append(float(time))
+                    Y.append(float(v[time][i]))
+
                 try:
                     m, b, R2 = linear_regression(X, Y)
-                    samples[date][sample_name]["RoC (ppm/min)"][gas] = m
-                    samples[date][sample_name]["R2"][gas] = R2
+                    v["RoC (ppm/min)"].append(round(m, 3)) 
+                    v["R2"].append(round(R2, 3))
                 except:
-                    samples[date][sample_name]["RoC (ppm/min)"][gas] = ''
-                    samples[date][sample_name]["R2"][gas] = ''
-                
+                    v["RoC (ppm/min)"].append('')
+                    v["R2"].append('')
 
 
-def output_data(samples, standards, sample_rows, times_dict, longest_file_name):
+def flux(something, count):
+    for k, v in something.items():
+        flux_helper(v, count - 1, 0)
+
+
+def flatten(something):
+    list_o_list = []
+    for k, v in something.items():
+        key_list = [k]
+        helper(v, key_list, list_o_list)
+    return list_o_list
+
+
+def helper(val, key_list, list_o_list):
+    if isinstance(val, dict):
+        for k, v in val.items():
+            key_list.append(k)
+            helper(v, key_list, list_o_list)
+            key_list.pop()
+
+    else:
+        list_o_list.append(key_list + val)
+        
+        
+
+def output_data(samples, standards, sample_rows, longest_file_name, columns, dates, count):
     
+    column_number_map = {
+        1: 'A',
+        2: 'B',
+        3: 'C',
+        4: 'D',
+        5: 'E',
+        6: 'F',
+        7: 'G',
+        8: 'H',
+        9: 'I',
+        10: 'J'
+    }
+
+    print(dates)
 
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
@@ -230,36 +291,58 @@ def output_data(samples, standards, sample_rows, times_dict, longest_file_name):
     worksheet.set_column(5, 5, len("Nitrous Oxide (ppm)"))
     worksheet.set_column(6, 6, longest_file_name)
 
-    for date in samples:
-        worksheet = workbook.add_worksheet(str(date))
-        row = 1
-        data_format_num = 1
-        worksheet.freeze_panes(1, 0)
-        worksheet.set_column(0, 0, len("Sample Name"))
-        worksheet.set_column(1, 1, len("Sample Time   "))
-        worksheet.set_column(2, 2, len("Methane (ppm)"))
-        worksheet.set_column(3, 3, len("Carbon Dioxide (ppm)"))
-        worksheet.set_column(4, 4, len("Oxygen (%)"))
-        worksheet.set_column(5, 5, len("Nitrogen (%)"))
-        worksheet.set_column(6, 6, len("Nitrous Oxide (ppm)"))
-        worksheet.set_column(7,7, longest_file_name)
-        worksheet.write_row(0, 0, ["Sample Name", "Sample Time", "Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"], title_format)
-        for sample_name in samples[date]:
-            sample = samples[date][sample_name]
-            if times_dict:
-                for time in times_dict:
-                    worksheet.write_row(row, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']], data_format[data_format_num])
-                    row += 1
-                worksheet.write_row(row, 0, [sample_name, "RoC (ppm/min)", sample["RoC (ppm/min)"]['Methane'], sample["RoC (ppm/min)"]['Carbon Dioxide'], sample["RoC (ppm/min)"]['Oxygen'], sample["RoC (ppm/min)"]['Nitrogen'], sample["RoC (ppm/min)"]['Nitrous Oxide'], ''], flux_format[data_format_num])
-                row += 1
-                worksheet.write_row(row, 0, [sample_name, "R2", sample["R2"]['Methane'], sample["R2"]['Carbon Dioxide'], sample["R2"]['Oxygen'], sample["R2"]['Nitrogen'], sample["R2"]['Nitrous Oxide'], ''], flux_format[data_format_num])
-                row += 1
-            else:
-                for time in sample:
-                    worksheet.write_row(row, 0, [sample_name, time, sample[time]['Methane'], sample[time]['Carbon Dioxide'], sample[time]['Oxygen'], sample[time]['Nitrogen'], sample[time]['Nitrous Oxide'], sample[time]['File']], data_format[data_format_num])
-                    row += 1
-            data_format_num = 1 - data_format_num
+    for date in dates:
+        if str(date).lower() != 'blank':
+            worksheet = workbook.add_worksheet(str(date))
+            worksheet.set_column(0 + len(columns), 0 + len(columns), len("Methane (ppm)"))
+            worksheet.set_column(1 + len(columns), 1 + len(columns), len("Carbon Dioxide (ppm)"))
+            worksheet.set_column(2 + len(columns), 2 + len(columns), len("Oxygen (%)"))
+            worksheet.set_column(3 + len(columns), 3 + len(columns), len("Nitrogen (%)"))
+            worksheet.set_column(4 + len(columns), 4 + len(columns), len("Nitrous Oxide (ppm)"))
+            worksheet.set_column(5 + len(columns), 5 + len(columns), longest_file_name)
 
+            row = 1
+            data_format_num = 1
+
+            worksheet.freeze_panes(1, 0)
+            for k in range(len(columns)):
+                worksheet.set_column(k, k, len(columns[k]))
+                if k == count - 1:
+                    worksheet.set_column(k, k, len("RoC (ppm/min)"))
+            worksheet.write_row(0, 0, columns + ["Methane (ppm)", "Carbon Dioxide (ppm)", "Oxygen (%)", "Nitrogen (%)", "Nitrous Oxide (ppm)", "File"], title_format)
+            current_sample = samples[0][1]
+
+            for i in range(len(samples)):
+                if samples[i][0] == date:
+                    if samples[i][1] != current_sample:
+                        data_format_num = 1 - data_format_num
+                        current_sample = samples[i][1]
+                    if samples[i][count] == 'RoC (ppm/min)':
+                        worksheet.write_row(row, 0, samples[i][1:] + [''], flux_format[data_format_num])
+                    elif samples[i][count] == 'R2':
+                        worksheet.write_row(row, 0, samples[i][1:] + [''], flux_format[data_format_num])
+                        sample_row = samples[i][1:-6]
+                        row += 1
+                        worksheet.write_row(row, 0, sample_row + ['Volume: ', 1, 'Temp: ', 1, 'Surface Area:', 1, ''], flux_format[data_format_num])
+                        row += 1
+
+                        CH4_flux = '=({}{}*({}{}/(0.0821*{}{}))*(0.044*1440)/({}{})*(12/44)/1000)'.format(
+                            column_number_map[count + 1], row - 2,
+                            column_number_map[count + 1], row,
+                            column_number_map[count + 3], row,
+                            column_number_map[count + 5], row)
+
+                        CO2_flux = '=({}{}*({}{}/(0.0821*{}{}))*(0.044*1440)/({}{})*(12/44)/1000)'.format(
+                            column_number_map[count + 2], row - 2,
+                            column_number_map[count + 1], row,
+                            column_number_map[count + 3], row,
+                            column_number_map[count + 5], row)
+
+                        worksheet.write_row(row, 0, sample_row + ["Flux", CH4_flux, CO2_flux, '', '', '', ''], flux_format[data_format_num])
+                                                                                                    
+                    else:   
+                        worksheet.write_row(row, 0, samples[i][1:], data_format[data_format_num])
+                    row += 1
     workbook.close()
     return out
 
@@ -268,24 +351,17 @@ def output_data(samples, standards, sample_rows, times_dict, longest_file_name):
 def GC():
     sample_rows = {}
     samples = {}
-    standards = {'1ppm': {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []},
-                    '5ppm': {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []}, 
-                    '50ppm': {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []}}
-    
-    layout_flux = [[sg.Text("Enter time intervals:", size=(15,1), background_color='#0680BF'), sg.InputText(key='-TIMES-')],
-        [sg.Text("Eg. \"0min, 3.5min, 7min\"", background_color='#0680BF')]]
+    standards = {}
 
     layout = [[sg.Text('GC Data Processing Tool', font='Any 36', background_color='#0680BF')],
         [sg.Text("", background_color='#0680BF')],
         [sg.Text('PDF files folder:', size=(15, 1), background_color='#0680BF'), sg.Input(key='-FOLDER-'), sg.FolderBrowse()],
+        [sg.Text('Naming regex:', size=(15, 1), background_color='#0680BF'), sg.InputText(key='-REGEX-')],
+        [sg.Text('Columns', size=(15, 1), background_color='#0680BF'), sg.InputText(key='-COLS-')],
+        [sg.Text('Standards', size=(15, 1), background_color='#0680BF'), sg.InputText(key='-STANDARDS-')],
         [sg.Checkbox("Calculate flux?", key="-FLUX-", background_color='#0680BF', enable_events=True)],
-        [sg.Column(layout_flux,  key='-COL1-', visible=False, background_color='#0680BF'), sg.Column([[]], key='-COL2-', visible=True, background_color='#0680BF' )],
         [sg.Text("", background_color='#0680BF')],
         [sg.Submit(), sg.Cancel()]]
-
-    #layout = [[sg.Column(layout, key='-COL1-'), sg.Column(layout2, visible=False, key='-COL2-'), sg.Column(layout3, visible=False, key='-COL3-')],
-     #     [sg.Button('Cycle Layout'), sg.Button('1'), sg.Button('2'), sg.Button('3'), sg.Button('Exit')]]
-
 
     # Create the window
     window = sg.Window("GC", layout, margins=(80, 50), background_color='#0680BF')
@@ -298,13 +374,7 @@ def GC():
         # presses the OK button
         if event == "Submit":
             break
-        elif event == '-FLUX-':
-            if values['-FLUX-']:
-                window[f'-COL2-'].update(visible=False)
-                window[f'-COL1-'].update(visible=True)
-            else:
-                window[f'-COL2-'].update(visible=True)
-                window[f'-COL1-'].update(visible=False)
+        
         elif event == "Cancel" or event == sg.WIN_CLOSED:
             cancelled = True
             break
@@ -316,10 +386,6 @@ def GC():
             print("Reading files")
             folder = values['-FOLDER-']
 
-            if values['-FLUX-']:
-                times_dict, times_list = process_times(values['-TIMES-'])
-            else:
-                times_dict = ''
 
             PDFs = get_PDFs(folder)
 
@@ -332,6 +398,32 @@ def GC():
             print(traceback.format_exc())
             raise Exception("Error in inputted information")
 
+
+        try:
+            regex, count = process_regex(values['-REGEX-'])
+        except Exception as e:
+            window.close()
+            print(traceback.format_exc())
+            raise Exception("Error in inputted naming regex")
+
+        try:
+            stans = values['-STANDARDS-'].split(',')
+            for stan in stans:
+                stan = stan.strip(' \t\n\r')
+                standards[stan] = {'Methane': [], 'Carbon Dioxide': [], 'Oxygen': [], 'Nitrogen': [], 'Nitrous Oxide': [], 'File': []}
+        except Exception as e:
+            window.close()
+            print(traceback.format_exc())
+            raise Exception("Error in inputted standards")
+
+        try:
+            columns = values['-COLS-'].split(', ')
+        except Exception as e:
+            window.close()
+            print(traceback.format_exc())
+            raise Exception("Error in inputted columns")
+
+
         layout = [[sg.Text('GC Data Processing Tool', font='Any 36', background_color='#0680BF')],
             [sg.Text("Processing... This may take a few minutes", background_color='#0680BF')],
             [sg.Text("", background_color='#0680BF')],
@@ -340,20 +432,30 @@ def GC():
         window.close()
         window = sg.Window("GC", layout, margins = (80, 50), background_color='#0680BF')
         
+
         try:
             print("Processing PDFs")
-            samples, standards, sample_rows, longest_file_name = process_PDFs(samples, standards, sample_rows, PDFs, window, times_dict)
+            samples, standards, sample_rows, longest_file_name, dates = process_PDFs(samples, standards, sample_rows, PDFs, window, regex, count)
+            print(samples)
+
+
+            if values['-FLUX-']:
+                flux(samples, count)
+
+            samples = flatten(samples)
+            for row in samples:
+                print(row)
+            print(samples)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
             raise Exception("Error processing PDFs: ensure MARIA.isr report format is used")
 
-        if values['-FLUX-']:
-            fluxes(samples, times_dict)
+        
 
         try:
             print("Outputting results")
-            out = output_data(samples, standards, sample_rows, times_dict, longest_file_name)
+            out = output_data(samples, standards, sample_rows, longest_file_name, columns, dates, count)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
