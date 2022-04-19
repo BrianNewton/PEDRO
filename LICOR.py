@@ -71,10 +71,12 @@ class draggable_lines:
 
 # Flux object
 class Flux:
-    def __init__(self, name, light_or_dark, start_time, end_time, start_temp, end_temp, chamber_height):
+    def __init__(self, name, light_or_dark, start_time, end_time, start_temp, end_temp, chamber_height, surface_area):
 
         light_regex = r"L|l|Light|light"
         dark_regex = r"D|d|Dark|dark"
+
+        self.surface_area = surface_area
 
         if re.search(light_regex, light_or_dark):
             self.name = name + " " + "light"    # flux light name
@@ -118,6 +120,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     start_temp_regex = r"start[ -_]temp"
     end_temp_regex = r"end[ -_]temp"
     chamber_height_regex = r"chamber[ -_]height[ ]?(m)"
+    surface_area_regex = r"surface[ -_]area[ ]?(m^2)"
 
     collar_index = 0
     l_or_d_index = 1
@@ -126,6 +129,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     start_temp_index = 4
     end_temp_index = 5
     chamber_height_index = 6
+    surface_area_index = 7
 
     # for each flux, obtain from field data file the name, start and end times
     f = open(field_data, "r")
@@ -146,12 +150,14 @@ def input_data(field_data, licor_data, CO2_or_CH4):
             end_temp_index = i
         if re.search(chamber_height_regex, x[i], re.IGNORECASE):
             chamber_height_index = i
-    
+        if re.search(surface_area_regex, x[i], re.IGNORECASE):
+            surface_area_index = i
+
     for line in f:
         x = line.split(",")
         for i in range(len(x)):
             x[i] = x[i].strip(' \t\n\r')
-        fluxes.append(Flux(x[collar_index], x[l_or_d_index], x[start_time_index], x[end_time_index], x[start_temp_index], x[end_temp_index], float(x[chamber_height_index])))
+        fluxes.append(Flux(x[collar_index], x[l_or_d_index], x[start_time_index], x[end_time_index], x[start_temp_index], x[end_temp_index], float(x[chamber_height_index]), float(x[surface_area_index])))
     f.close()
 
     # use the raw LICOR data as well as the parsed field data to obtain unpruned sets of times and concentrations for each flux
@@ -343,7 +349,7 @@ def linear_regression(X, Y):
 
 
 # performs linear regression to generate linear gas concentration rate of change per minute
-def flux_calculation(fluxes, surface_area, CO2_or_CH4):
+def flux_calculation(fluxes, CO2_or_CH4):
     for flux in fluxes:
         X = flux.pruned_times
         Y = flux.pruned_CH4
@@ -351,14 +357,14 @@ def flux_calculation(fluxes, surface_area, CO2_or_CH4):
         m, b, R2 = linear_regression(X, Y)
 
         # calculates flux depending on CO2 vs. CH4
-        vol = surface_area * flux.chamber_height * 1000
+        vol = flux.surface_area * flux.chamber_height * 1000
 
         flux.RSQ = R2
         flux.RoC = m * 60
         if CO2_or_CH4.lower() == "co2":
-            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(surface_area)*(12/44)/1000)
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)*(12/44)/1000)
         else:
-            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(surface_area)*(12/16)/1000)
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000)
 
 
 # calculates cut offsets for the sake of reporting
@@ -389,7 +395,7 @@ def offsets(fluxes):
 
 
 # outputs data to excel file
-def outputData(fluxes, site, date, CO2_or_CH4, surface_area):
+def outputData(fluxes, site, date, CO2_or_CH4):
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
 
@@ -398,19 +404,19 @@ def outputData(fluxes, site, date, CO2_or_CH4, surface_area):
     worksheet.write_row(0, 0, ["Site:", site])
     worksheet.write_row(1, 0, ["Date:", date])
     if CO2_or_CH4.lower() == "co2":
-        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '',  "RSQ", "Rate of change (CO2 [ppm/min])", "Flux of CO2 (g C m^-2 d^-1", "Data loss (%)"])
+        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '',  "RSQ", "Rate of change (CO2 [ppm/min])", "m (CO2 [ppm/sec])", "Flux of CO2 (g C m^-2 d^-1", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     else:
-        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '', "RSQ", "Rate of change (CH4 [ppm/min])", "Flux of CH4 (g C m^-2 d^-1", "Data loss (%)"])
+        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '', "RSQ", "Rate of change (CH4 [ppb/min])", "m (CH4 [ppb/sec])", "Flux of CH4 (g C m^-2 d^-1", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     for i in range(len(fluxes)):
-        vol = surface_area * fluxes[i].chamber_height * 1000
-        worksheet.write_column(3, i + 1, [fluxes[i].name , '', vol, fluxes[i].temp, '', fluxes[i].RSQ, fluxes[i].RoC, fluxes[i].flux, fluxes[i].data_loss])
+        vol = fluxes[i].surface_area * fluxes[i].chamber_height * 1000
+        worksheet.write_column(3, i + 1, [fluxes[i].name , '', vol, fluxes[i].temp, '', fluxes[i].RSQ, fluxes[i].RoC, fluxes[i].RoC/60, fluxes[i].flux, fluxes[i].data_loss])
         worksheet.set_column(i + 1, i + 1, len(fluxes[i].name ))
     worksheet.set_column(0, 0, len("Rate of change (CH4 [ppm/min])"))
     
     # create page for each flux, pages give a detailed breakdown of each fluxes data sets as well as the values that have been cut
     worksheets = {}
     for flux in fluxes:
-        vol = surface_area*flux.chamber_height * 1000
+        vol = flux.surface_area*flux.chamber_height * 1000
         if flux.name not in worksheets:
             worksheet = workbook.add_worksheet(flux.name)
             worksheets[flux.name] = 1
@@ -419,11 +425,12 @@ def outputData(fluxes, site, date, CO2_or_CH4, surface_area):
             worksheet = workbook.add_worksheet(flux.name + " (%s)" %(str(worksheets[flux.name])))
         worksheet.write_row(0, 0, ["Name", flux.name])
         worksheet.write_row(1, 0, ["RSQ", flux.RSQ, '', '', "Chamber volume (L)", vol])
-        worksheet.write_row(2, 0, ["Rate of change (CH4 [ppm/min]", flux.RoC, '', '', "Air temp (K)", flux.temp])
         if CO2_or_CH4.lower() == 'co2':
-            worksheet.write_row(3, 0, ["Flux of CO2 (g C m^-2 d^-1", flux.flux])
+            worksheet.write_row(2, 0, ["Rate of change (CO2 [ppm/min]", flux.RoC, '', '', "Air temp (K)", flux.temp])
+            worksheet.write_row(3, 0, ["Flux of CO2 (g C m^-2 d^-1)", flux.flux])
         else:
-            worksheet.write_row(3, 0, ["Flux of CH4 (g C m^-2 d^-1", flux.flux])
+            worksheet.write_row(2, 0, ["Rate of change (CH4 [ppb/min]", flux.RoC, '', '', "Air temp (K)", flux.temp])
+            worksheet.write_row(3, 0, ["Flux of CH4 (g C m^-2 d^-1)", flux.flux])
         worksheet.write_row(4, 0, ["Data loss (%)", flux.data_loss])
 
         worksheet.write(6, 0, "Original times (s)")
@@ -556,7 +563,7 @@ def LICOR():
             raise Exception("Error pruning data: Verify times are correct in field data file")
 
         try:
-            flux_calculation(fluxes, surface_area, CO2_or_CH4)
+            flux_calculation(fluxes, CO2_or_CH4)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
@@ -570,7 +577,7 @@ def LICOR():
             raise Exception("Error generating linear offsets: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
         
         try:
-            out = outputData(fluxes, site, date, CO2_or_CH4, surface_area)
+            out = outputData(fluxes, site, date, CO2_or_CH4)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
