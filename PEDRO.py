@@ -53,7 +53,7 @@ while True:
             print(traceback.format_exc())
             error_screen(e)
         window.UnHide()
-    elif event == "GC (unstable)":
+    elif event == "GC":
         window.Hide()
         try:
             print("===== GC =====")
