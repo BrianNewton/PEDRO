@@ -23,6 +23,7 @@ import os
 import re
 import tkinter
 import tkinter.filedialog
+import xlsxwriter
 from os.path import  join
 import PySimpleGUI as sg
 import traceback
@@ -139,7 +140,7 @@ def on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid):
     samples[i].end_time = line_R.x
 
     # right arrow key moves to the next sample, or exits if currently on the last sample
-    if event.key == 'right':
+    if event.key == 'right' or event.key == 'space':
         if i == len(samples) - 1:
             plt.close()
             return 0
@@ -281,6 +282,10 @@ def linear_model(samples, FMA):
 
     # for each set of standards, generates a random non-sample baseline data point
     numStandards = len(X)
+
+    if numStandards == 0:
+        return(1, 1, 1)
+
     for i in range(numStandards):
         Y.append(float(FMA[random.randint(0, len(FMA))][1]))
         X.append(0)
@@ -323,22 +328,24 @@ def concentrations(samples, m, b):
 
 # outputs data to csv file
 def outputData(samples, m, b, R2):
-    out = tkinter.filedialog.asksaveasfilename(defaultextension='.csv')
+    out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
+    workbook = xlsxwriter.Workbook(out)
 
-    f = open(out, "a", newline='')
-    write = csv.writer(f)
-    write.writerow(["Date: ", "\'" + str(datetime.datetime.now().replace(microsecond=0))])
-    write.writerow([])
-    write.writerow(["Linear model:"])
-    write.writerow(["m: ", m])
-    write.writerow(["b: ", b])
-    write.writerow(["R2: ", R2])
-    write.writerow([])
-    write.writerow(["Sample name", "Start time (s)", "End time (s)", "Peak area", "CH4 concentration (ppm)"])
+    worksheet = workbook.add_worksheet("Results")
+    worksheet.write_row(0, 0, ["Date: ", str(datetime.datetime.now().replace(microsecond=0))])
+    worksheet.write_row(2, 0, ["Linear model:"])
+    worksheet.write_row(3, 0, ["m:", m])
+    worksheet.write_row(4, 0, ["b:", b])
+    worksheet.write_row(5, 0, ["R2:", R2])
+    worksheet.write_row(7, 0, ["Sample name", "Start time (s)", "End time (s)", "Peak area", "CH4 concentration (ppm)"])
 
-    # write each sample data
+    row = 8
+
     for i in range(len(samples)):
-        write.writerow([samples[i].name, samples[i].start_time, samples[i].end_time, samples[i].area, samples[i].CH4])
+        worksheet.write_row(row, 0, [samples[i].name, samples[i].start_time, samples[i].end_time, samples[i].area, "=D{}*B4+B5".format(str(row + 1))])
+        row += 1
+
+    workbook.close()
     return out
 
 #########################################################################################################################
