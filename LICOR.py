@@ -482,25 +482,15 @@ def outputData(fluxes, site, date, CO2_or_CH4):
 
 def LICOR():
 
-    layout_cylinder = [[sg.Text("Radius (m):", size=(14, 1), background_color='#DF954A'), sg.InputText(key='-RADIUS-')]]
-
-    layout_box = [[sg.Text("Length (m):", size=(14, 1), background_color='#DF954A'), sg.InputText(key='-LENGTH-')],
-          [sg.Text("Width (m):", size=(14, 1), background_color='#DF954A'), sg.InputText(key='-WIDTH-')]]
-
     layout = [[sg.Text('LICOR Data Processing Tool', font='Any 36', background_color='#DF954A')],
         [sg.Text("", background_color='#DF954A')],
         [sg.Text('Field data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
         [sg.Text('LICOR data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
         [sg.Text('Gas to analyze:', size=(15, 1), background_color='#DF954A'), sg.Radio('CO2', 'RADIO2', enable_events=True, default=False, key='-CO2-', background_color='#DF954A'), sg.Radio('CH4', 'RADIO2',enable_events=True, default=True, key='-CH4-', background_color='#DF954A')],
-        [sg.Text('Chamber shape:', size=(15, 1), background_color='#DF954A'), sg.Radio('Cylinder', 'RADIO1', enable_events=True,  default=True, key='-CIRCLE-', background_color='#DF954A'), sg.Radio('Box', 'RADIO1', enable_events=True, default=False, key='-SQUARE-', background_color='#DF954A')],  
-        [sg.Column(layout_cylinder,  key='-COL1-', background_color='#DF954A'), sg.Column(layout_box, visible=False, key='-COL2-', background_color='#DF954A')],
         [sg.Text("Site name:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-SITE-')],
         [sg.Text("Date:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-DATE-')],
         [sg.Text("", background_color='#DF954A')],
         [sg.Submit(), sg.Cancel()]]
-
-    #layout = [[sg.Column(layout, key='-COL1-'), sg.Column(layout2, visible=False, key='-COL2-'), sg.Column(layout3, visible=False, key='-COL3-')],
-     #     [sg.Button('Cycle Layout'), sg.Button('1'), sg.Button('2'), sg.Button('3'), sg.Button('Exit')]]
 
 
     # Create the window
@@ -535,12 +525,6 @@ def LICOR():
         try:
             field_data = values['-FIELD-']
             licor_data = values['-LICOR-']
-
-            if values['-CIRCLE-']:
-                surface_area = float(values['-RADIUS-']) ** 2 * math.pi
-            else:
-                surface_area = float(values['-WIDTH-']) * float(values['-LENGTH-'])
-
             site = values['-SITE-']
             date = values['-DATE-']
         except Exception as e:
