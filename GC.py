@@ -25,8 +25,11 @@ def get_PDFs(folder):
 # turn user inputted sample name regex into python re regex
 def process_regex(naming_regex):
     regex = naming_regex.replace('s', '\\D+')       # 's' for strings
+    regex = naming_regex.replace('S', '\\D+')       # 'S' for strings
     regex = regex.replace('d', '\\d+(?:\\.\\d+)?')  # 'd' for numbers
+    regex = regex.replace('D', '\\d+(?:\\.\\d+)?')  # 'D' for numbers
     regex = regex.replace('x', '.+')                # 'x' for either
+    regex = regex.replace('X', '.+')                # 'x' for either
     regex = regex.replace('-', '[\\s_-]+')          # '-' for delimiter
     return regex, naming_regex.count('(')           # for columns
 
