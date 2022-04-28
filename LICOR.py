@@ -463,11 +463,11 @@ def outputData(fluxes, site, date, CO2_or_CH4):
         chart.add_series({'values' : '=\'%s\'!E8:E%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A8:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Cut values', 'line': {'color': 'red'}})
         chart.add_series({'values' : '=\'%s\'!F8:F%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A9:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Kept values', 'line': {'color': 'green'}})
         if CO2_or_CH4.lower() == "co2":
-            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentraion (ppm)'})
+            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentration (ppm)'})
         else:
-            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentraion (ppb)'})
+            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentration (ppb)'})
         chart.set_y_axis({'name': 'Time (s)'})
-        chart.set_title({'name' : 'Concentraion vs. Time'})
+        chart.set_title({'name' : 'Concentration vs. Time'})
         chart.set_size({'width': 800, 'height': 600})
         worksheet.insert_chart('I8', chart)
     
