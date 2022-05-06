@@ -122,7 +122,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     chamber_height_regex = r"chamber[ -_]height[ ]?(m)"
     surface_area_regex = r"surface[ -_]area[ ]?(m^2)"
 
-    LICOR_time_regex = r"TIME"
+    LICOR_time_regex = r"^TIME"
     LICOR_CH4_regex = r"CH4"
     LICOR_CO2_regex = r"CO2"
 
@@ -171,8 +171,9 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     # use the raw LICOR data as well as the parsed field data to obtain unpruned sets of times and concentrations for each flux
     f = open(licor_data, "r")
     x = next(f).split(",")
-    while len(x) <= 2:
+    while x[0] != "DATAH":
         x = next(f).split(",")
+    print(x)
     for i in range(len(x)):
         if re.search(LICOR_time_regex, x[i], re.IGNORECASE):
             LICOR_time_index = i
