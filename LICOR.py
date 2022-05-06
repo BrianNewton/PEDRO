@@ -122,6 +122,10 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     chamber_height_regex = r"chamber[ -_]height[ ]?(m)"
     surface_area_regex = r"surface[ -_]area[ ]?(m^2)"
 
+    LICOR_time_regex = r"TIME"
+    LICOR_CH4_regex = r"CH4"
+    LICOR_CO2_regex = r"CO2"
+
     collar_index = 0
     l_or_d_index = 1
     start_time_index = 2
@@ -130,6 +134,10 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     end_temp_index = 5
     chamber_height_index = 6
     surface_area_index = 7
+
+    LICOR_time_index = 7
+    LICOR_CH4_index = 10
+    LICOR_CO2_index = 9
 
     # for each flux, obtain from field data file the name, start and end times
     f = open(field_data, "r")
@@ -162,15 +170,24 @@ def input_data(field_data, licor_data, CO2_or_CH4):
 
     # use the raw LICOR data as well as the parsed field data to obtain unpruned sets of times and concentrations for each flux
     f = open(licor_data, "r")
-    next(f), next(f), next(f), next(f), next(f), next(f), next(f)
-    i = 0
+    x = next(f).split(",")
+    while len(x) <= 2:
+        x = next(f).split(",")
+    for i in range(len(x)):
+        if re.search(LICOR_time_regex, x[i], re.IGNORECASE):
+            LICOR_time_index = i
+        if re.search(LICOR_CH4_regex, x[i], re.IGNORECASE):
+            LICOR_CH4_index = i
+        if re.search(LICOR_CO2_regex, x[i], re.IGNORECASE):
+            LICOR_CO2_index = i
+
     in_flux = 0
     times = []
     CH4 = []
     if CO2_or_CH4.lower() == 'co2':
-        index = 8
+        index = LICOR_CO2_index
     else:
-        index = 9
+        index = LICOR_CH4_index
 
     # go line by line in LICOR data, adding relevant times and concentrations to approrpiate fluxes
     for flux in fluxes:
@@ -181,7 +198,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
             for k in range(len(x)):
                 x[k] = x[k].strip(' \t\n\r')
             if in_flux == 0:    # if current line in LICOR data isn't in a flux, check to see if it's the start time of the next flux
-                if x[6] == flux.start_time:
+                if x[LICOR_time_index] == flux.start_time:
                     in_flux = 1
                     start_seconds = float(x[1])
                     times.append(float(x[1]) - start_seconds)
@@ -189,7 +206,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
             elif in_flux == 1:  # if current line in LICOR data is in a flux, append the time and gas concentration to flux
                 times.append(float(x[1]) - start_seconds)
                 CH4.append(float(x[index]))
-                if x[6] == flux.end_time:  # if current line in LICOR data is the end time of the current flux, finalize times and concentrations sets and stop
+                if x[LICOR_time_index] == flux.end_time:  # if current line in LICOR data is the end time of the current flux, finalize times and concentrations sets and stop
                     flux.times = times
                     flux.CH4 = CH4
                     flux.pruned_times = times
