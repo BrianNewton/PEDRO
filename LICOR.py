@@ -26,48 +26,46 @@ import traceback
 
 # draggable lines for user cuts
 class draggable_lines:
-    def __init__(self, ax, h_or_v, start_coordinate, x_bounds, y_bounds):
+    def __init__(self, ax, start_coordinate, x_bounds, y_bounds):
         self.ax = ax
         self.c = ax.get_figure().canvas
-        self.h_or_v = h_or_v
         self.x_bounds = x_bounds
         self.y_bounds = y_bounds
+        self.press = None
 
-        if h_or_v == 'v':
-            self.x = [start_coordinate, start_coordinate]
-            self.y = y_bounds
-            self.line = lines.Line2D(self.x, self.y, color='r', picker=5)
-        elif h_or_v == 'h':
-            self.x = x_bounds
-            self.y = [start_coordinate,start_coordinate]
-            self.line = lines.Line2D(self.x, self.y, color='g', picker=5)
+        self.line = lines.Line2D([start_coordinate, start_coordinate], y_bounds, color='r', picker=5)
 
         self.ax.add_line(self.line)
         self.c.draw_idle()
-        self.sid = self.c.mpl_connect('pick_event', self.clickonline)
+        self.sid = self.c.mpl_connect('button_press_event', self.on_press)
+        self.sid = self.c.mpl_connect('motion_notify_event', self.on_motion)
+        self.sid = self.c.mpl_connect('button_release_event', self.on_release)
 
-    def clickonline(self, event):
-        if event.artist == self.line:
-            self.follower = self.c.mpl_connect("motion_notify_event", self.followmouse)
-            self.releaser = self.c.mpl_connect("button_press_event", self.releaseonclick)
 
-    def followmouse(self, event):
-        if self.h_or_v == 'v':
-            if event.xdata and self.x_bounds[0] <= event.xdata <= self.x_bounds[1]:
-                self.line.set_xdata([event.xdata, event.xdata])
-        else:
-            if event.ydata and self.y_bounds[0] <= event.ydata <= self.y_bounds[1]:
-                self.line.set_ydata([event.ydata, event.ydata])
+    def on_press(self, event):
+        if abs(event.xdata - self.line.get_xdata()[0]) < 3:
+            self.press = (self.line.get_xdata()[0], event.xdata)
+        return
+    
+    def on_motion(self, event):
+        if self.press == None:
+            return 
+        try: 
+            x0, xpress = self.press
+            dx = event.xdata - xpress
+            if self.x_bounds[0] >= (x0 + dx):
+                self.line.set_xdata([self.x_bounds[0],self.x_bounds[0]])
+            elif (x0 + dx) >= self.x_bounds[1]:
+                self.line.set_xdata([self.x_bounds[1], self.x_bounds[1]])
+            else:
+                self.line.set_xdata([x0+dx, x0+dx])
+        except:
+            pass
+    
+    def on_release(self, event):
+        self.press = None
         self.c.draw_idle()
-
-    def releaseonclick(self, event):
-        if self.h_or_v == 'v':
-            self.x = self.line.get_xdata()
-        else:
-            self.y = self.line.get_ydata()
-        self.c.mpl_disconnect(self.releaser)
-        self.c.mpl_disconnect(self.follower)
-
+      
 
 # Flux object
 class Flux:
@@ -231,42 +229,46 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid):
     if event.key == 'enter':
 
         # get cut indices from left and right lines
-        time_L = floor(line_L.x[0])
-        time_R = floor(line_R.x[0])
-        time_L_index = fluxes[i].pruned_times.index(time_R)
-        time_R_index = fluxes[i].pruned_times.index(time_L)
+        time_L = floor(line_L.line.get_xdata()[0])
+        time_R = floor(line_R.line.get_xdata()[0])
+
+        time_L_index = fluxes[i].pruned_times.index(time_L)
+        time_R_index = fluxes[i].pruned_times.index(time_R)
         
-        # if both indices exist, set CH4 delta as the gap between the last entry before and first entry after the cut
-        # this is for the sake of maintaining a linear relationship, it adds a fixed offset to each entry after the cut
-        # if the cut is at the boundary of the data, the offset will be set to zero (i.e. the cut isn't in the middle of the data)
-        if time_L_index and time_R_index:
-            CH4_delta = fluxes[i].pruned_CH4[time_R_index] - fluxes[i].pruned_CH4[time_L_index]
+        if (time_R_index - time_L_index + 1) >= len(fluxes[i].pruned_times):
+            print("Error! Can't cut entire data set, please narrow your selection with the two red cursors")
         else:
-            CH4_delta = 0
+            # if both indices exist, set CH4 delta as the gap between the last entry before and first entry after the cut
+            # this is for the sake of maintaining a linear relationship, it adds a fixed offset to each entry after the cut
+            # if the cut is at the boundary of the data, the offset will be set to zero (i.e. the cut isn't in the middle of the data)
+            if time_L_index and time_R_index:
+                CH4_delta = fluxes[i].pruned_CH4[time_R_index] - fluxes[i].pruned_CH4[time_R_index]
+            else:
+                CH4_delta = 0
 
-        # obtain time offset as the time elapsed by the cut
-        # for the sake of maintaining a linear relationship, adds a fixed offset
-        time_delta = time_R - time_L
-        fluxes[i].cuts.append([time_R_index, time_L_index])
+            # obtain time offset as the time elapsed by the cut
+            # for the sake of maintaining a linear relationship, adds a fixed offset
+            time_delta = time_R - time_L
+            fluxes[i].cuts.append([time_L_index, time_R_index])
 
-        times = []
-        CH4 = []
+            times = []
+            CH4 = []
 
-        # if entry is not in the cut, add it to a new set
-        for k in range(len(fluxes[i].pruned_times)):
-            if fluxes[i].pruned_times[k] < time_L:
-                times.append(fluxes[i].pruned_times[k])
-                CH4.append(fluxes[i].pruned_CH4[k])
-            if fluxes[i].pruned_times[k] > time_R:
-                times.append(fluxes[i].pruned_times[k] - time_delta)
-                CH4.append(fluxes[i].pruned_CH4[k] + CH4_delta)
-          
-        # update flux pruned sets with cut sets
-        fluxes[i].pruned_times = times
-        fluxes[i].pruned_CH4 = CH4
+            # if entry is not in the cut, add it to a new set
+            for k in range(len(fluxes[i].pruned_times)):
+                if fluxes[i].pruned_times[k] < time_L:
+                    times.append(fluxes[i].pruned_times[k])
+                    CH4.append(fluxes[i].pruned_CH4[k])
+                if fluxes[i].pruned_times[k] > time_R:
+                    times.append(fluxes[i].pruned_times[k] - time_delta)
+                    CH4.append(fluxes[i].pruned_CH4[k] + CH4_delta)
+            
+            # update flux pruned sets with cut sets
+            fluxes[i].pruned_times = times
+            fluxes[i].pruned_CH4 = CH4
 
-        # refresh the plot
-        draw_plot(i, fluxes, fig, ax, cid)
+            # refresh the plot
+            draw_plot(i, fluxes, fig, ax, cid)
 
     # if r key pressed, reset data
     if event.key == 'r':
@@ -303,8 +305,8 @@ def draw_plot(i, fluxes, fig, ax, cid):
     ax.add_artist(at)
     
     plt.plot(fluxes[i].pruned_times, fluxes[i].pruned_CH4, linewidth = 2.0)
-    line_L = draggable_lines(ax, 'v', fluxes[i].pruned_times[0], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, 'v', fluxes[i].pruned_times[-1], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())     # right draggable boundary line
+    line_L = draggable_lines(ax, fluxes[i].pruned_times[0], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, fluxes[i].pruned_times[-1], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())     # right draggable boundary line
 
     # if currently on the last flux, change header information, otherwise set title to user controls
     if i == len(fluxes) - 1:

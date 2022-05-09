@@ -33,33 +33,45 @@ import traceback
 
 # draggable lines for user determined peak bounds
 class draggable_lines:
-    def __init__(self, ax, x, y_limits):
+    def __init__(self, ax, start_coordinate, x_bounds, y_bounds):
         self.ax = ax
         self.c = ax.get_figure().canvas
-        self.x = x
+        self.x_bounds = x_bounds
+        self.y_bounds = y_bounds
+        self.press = None
 
-        x = [x, x]
-        y = y_limits
-        
-        self.line = lines.Line2D(x, y, color='r', picker=5)
+        self.line = lines.Line2D([start_coordinate, start_coordinate], y_bounds, color='r', picker=5)
 
         self.ax.add_line(self.line)
         self.c.draw_idle()
-        self.sid = self.c.mpl_connect('pick_event', self.clickonline)
+        self.sid = self.c.mpl_connect('button_press_event', self.on_press)
+        self.sid = self.c.mpl_connect('motion_notify_event', self.on_motion)
+        self.sid = self.c.mpl_connect('button_release_event', self.on_release)
 
-    def clickonline(self, event):
-        if event.artist == self.line:
-            self.follower = self.c.mpl_connect("motion_notify_event", self.followmouse)
-            self.releaser = self.c.mpl_connect("button_press_event", self.releaseonclick)
 
-    def followmouse(self, event):
-        self.line.set_xdata([event.xdata, event.xdata])
+    def on_press(self, event):
+        if abs(event.xdata - self.line.get_xdata()[0]) < 3:
+            self.press = (self.line.get_xdata()[0], event.xdata)
+        return
+    
+    def on_motion(self, event):
+        if self.press == None:
+            return 
+        try: 
+            x0, xpress = self.press
+            dx = event.xdata - xpress
+            if self.x_bounds[0] >= (x0 + dx):
+                self.line.set_xdata([self.x_bounds[0],self.x_bounds[0]])
+            elif (x0 + dx) >= self.x_bounds[1]:
+                self.line.set_xdata([self.x_bounds[1], self.x_bounds[1]])
+            else:
+                self.line.set_xdata([x0+dx, x0+dx])
+        except:
+            pass
+    
+    def on_release(self, event):
+        self.press = None
         self.c.draw_idle()
-
-    def releaseonclick(self, event):
-        self.x = self.line.get_xdata()[0]
-        self.c.mpl_disconnect(self.releaser)
-        self.c.mpl_disconnect(self.follower)
 
 
 # sample object, one created for each individual sample
@@ -136,8 +148,8 @@ def on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid):
     sys.stdout.flush()
 
     # when changing samples, obtain newly set start and end times from the positions of the user set bounds
-    samples[i].start_time = line_L.x
-    samples[i].end_time = line_R.x
+    samples[i].start_time = line_L.line.get_xdata()[0]
+    samples[i].end_time = line_R.line.get_xdata()[0]
 
     # right arrow key moves to the next sample, or exits if currently on the last sample
     if event.key == 'right' or event.key == 'space':
@@ -172,8 +184,8 @@ def draw_plot(i, samples, FMA, fig, ax, cid):
     ax = fig.add_subplot()
     plt.plot(samples[i].times, samples[i].concentrations, linewidth = 2.0)
 
-    line_L = draggable_lines(ax, samples[i].start_time, plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].end_time, plt.gca().get_ylim())     # right draggable boundary line
+    line_L = draggable_lines(ax, samples[i].start_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].end_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())     # right draggable boundary line
 
     # if currently on the last sample, change header information, otherwise set title to user controls
     if i == len(samples) - 1:
@@ -194,8 +206,6 @@ def obtain_peaks(samples, FMA):
     i = 0
     fig, ax = plt.subplots()
     fig.set_size_inches(6,6)
-    line_L = draggable_lines(ax, samples[i].start_time, plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].end_time, plt.gca().get_ylim())     # right draggable boundary line
     cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid))   # connect key press event
     plt.grid(True)
     plt.ion()
