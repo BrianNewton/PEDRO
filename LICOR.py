@@ -242,7 +242,7 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid):
             # this is for the sake of maintaining a linear relationship, it adds a fixed offset to each entry after the cut
             # if the cut is at the boundary of the data, the offset will be set to zero (i.e. the cut isn't in the middle of the data)
             if time_L_index and time_R_index:
-                CH4_delta = fluxes[i].pruned_CH4[time_R_index] - fluxes[i].pruned_CH4[time_R_index]
+                CH4_delta = fluxes[i].pruned_CH4[time_L_index] - fluxes[i].pruned_CH4[time_R_index]
             else:
                 CH4_delta = 0
 
