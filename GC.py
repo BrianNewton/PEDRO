@@ -317,7 +317,7 @@ def output_data(samples, standards, longest_file_name, columns, dates, count):
                         row += 1
 
                         # CH4 flux excel formula builder
-                        CH4_flux = '=({}{}*({}{}/(0.0821*{}{}))*(0.044*1440)/({}{})*(12/44)/1000)'.format(
+                        CH4_flux = '=({}{}*({}{}/(0.0821*{}{}))*(0.016*1440)/({}{})*(12/16)/1000)'.format(
                             column_number_map[count + 1], row - 2,
                             column_number_map[count + 1], row,
                             column_number_map[count + 3], row,
