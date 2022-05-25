@@ -139,7 +139,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
 
     # for each flux, obtain from field data file the name, start and end times
     f = open(field_data, "r")
-    x = next(f).split(",")
+    x = next(f).replace('\t', ',').replace(';',',').split(",")
     for i in range(len(x)):
         x[i] = x[i].strip(' \t\n\r')
         if re.search(collar_regex, x[i], re.IGNORECASE):
@@ -160,7 +160,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
             surface_area_index = i
 
     for line in f:
-        x = line.split(",")
+        x = line.replace('\t', ',').replace(';', ',').split(",")
         for i in range(len(x)):
             x[i] = x[i].strip(' \t\n\r')
         fluxes.append(Flux(x[collar_index], x[l_or_d_index], x[start_time_index], x[end_time_index], x[start_temp_index], x[end_temp_index], float(x[chamber_height_index]), float(x[surface_area_index])))
@@ -168,9 +168,9 @@ def input_data(field_data, licor_data, CO2_or_CH4):
 
     # use the raw LICOR data as well as the parsed field data to obtain unpruned sets of times and concentrations for each flux
     f = open(licor_data, "r")
-    x = next(f).split(",")
+    x = next(f).replace('\t', ',').replace(';',',').split(",")
     while x[0] != "DATAH":
-        x = next(f).split(",")
+        x = next(f).replace('\t', ',').replace(';',',').split(",")
     print(x)
     for i in range(len(x)):
         if re.search(LICOR_time_regex, x[i], re.IGNORECASE):
@@ -193,9 +193,11 @@ def input_data(field_data, licor_data, CO2_or_CH4):
         f.seek(6)
         print(flux.name)
         for line in f:
-            x = line.split(",")
+            x = line.replace('\t', ',').replace(';', ',').split(',')
             for k in range(len(x)):
                 x[k] = x[k].strip(' \t\n\r')
+            if len(x) == 2:
+                continue
             if in_flux == 0:    # if current line in LICOR data isn't in a flux, check to see if it's the start time of the next flux
                 if x[LICOR_time_index] == flux.start_time:
                     in_flux = 1
