@@ -270,14 +270,14 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid):
             fluxes[i].pruned_CH4 = CH4
 
             # refresh the plot
-            draw_plot(i, fluxes, fig, ax, cid)
+            draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
 
     # if r key pressed, reset data
     if event.key == 'r':
         fluxes[i].pruned_times = fluxes[i].times
         fluxes[i].pruned_CH4 = fluxes[i].CH4
         fluxes[i].cuts = []
-        draw_plot(i, fluxes, fig, ax, cid)
+        draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
     
     # right arrow key moves to the next flux, or exits if currently on the last flux
     if event.key == 'right':
@@ -286,16 +286,16 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid):
             plt.close('all')
             return 0
         else:
-            draw_plot(i + 1, fluxes, fig, ax, cid)
+            draw_plot(i + 1, fluxes, fig, ax, cid, CO2_or_CH4)
         
     # left arrow key moves to the previous flux, or does nothing if at the beginning
     if event.key == 'left':
         if i != 0:
-            draw_plot(i - 1, fluxes, fig, ax, cid)
+            draw_plot(i - 1, fluxes, fig, ax, cid, CO2_or_CH4)
 
 
 #draw plot for i-th flux
-def draw_plot(i, fluxes, fig, ax, cid):
+def draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4):
 
     fig.clear()
     ax = fig.add_subplot()
@@ -317,7 +317,11 @@ def draw_plot(i, fluxes, fig, ax, cid):
         ax.set(title = fluxes[i].name + '\nUse arrow keys to navigate fluxes, enter to cut data, r to reset cuts\nUse the mouse to drag cut bounds')
 
     ax.set(xlabel = "Time (s)")                 # x axis label
-    ax.set(ylabel = "CH4 concentration (ppm)")  # y axis label
+
+    if CO2_or_CH4 == 'co2':
+        ax.set(ylabel = "CO2 concentration (ppm)")  # y axis label
+    else:
+        ax.set(ylabel = "CH4 concentration (ppb)")
     fig.canvas.mpl_disconnect(cid)
     cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax, cid))   # connect key press event  
     ax.grid(True)
@@ -325,14 +329,14 @@ def draw_plot(i, fluxes, fig, ax, cid):
 
 
 # entry point for drawing the plots for the user to cut data
-def prune(fluxes):
+def prune(fluxes, CO2_or_CH4):
     i = 0
     fig, ax = plt.subplots()
     fig.set_size_inches(9,6)
     cid = ''
     plt.grid(True)
     plt.ion()
-    draw_plot(i, fluxes, fig, ax, cid)
+    draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
     plt.show(block=False)
     while plt.get_fignums():
         fig.canvas.draw_idle()
@@ -485,10 +489,10 @@ def outputData(fluxes, site, date, CO2_or_CH4):
         chart.add_series({'values' : '=\'%s\'!E8:E%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A8:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Cut values', 'line': {'color': 'red'}})
         chart.add_series({'values' : '=\'%s\'!F8:F%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A9:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Kept values', 'line': {'color': 'green'}})
         if CO2_or_CH4.lower() == "co2":
-            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentration (ppm)'})
+            chart.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentration (ppm)'})
         else:
-            chart.set_x_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentration (ppb)'})
-        chart.set_y_axis({'name': 'Time (s)'})
+            chart.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentration (ppb)'})
+        chart.set_x_axis({'name': 'Time (s)'})
         chart.set_title({'name' : 'Concentration vs. Time'})
         chart.set_size({'width': 800, 'height': 600})
         worksheet.insert_chart('I8', chart)
@@ -562,7 +566,7 @@ def LICOR():
             raise Exception("Error parsing data files: Ensure your field data and LICOR data are formatted correctly")
         
         try:
-            prune(fluxes)
+            prune(fluxes, CO2_or_CH4)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
@@ -631,7 +635,7 @@ if __name__ == "__main__":
     date = input("Enter the site date: ")
 
     fluxes = input_data(field_data, licor_data, CO2_or_CH4)
-    prune(fluxes)
+    prune(fluxes, CO2_or_CH4)
     linear_regression(fluxes, Vol, CO2_or_CH4)
     offsets(fluxes)
     out = outputData(fluxes, site, date, CO2_or_CH4, Vol)
