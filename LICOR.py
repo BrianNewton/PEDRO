@@ -224,7 +224,7 @@ def input_data(field_data, licor_data, CO2_or_CH4):
 
 
 # process button press for plot
-def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid):
+def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4):
     sys.stdout.flush()
 
     # if enter key pressed, cut data according to currently set cut bounds
@@ -323,7 +323,7 @@ def draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4):
     else:
         ax.set(ylabel = "CH4 concentration (ppb)")
     fig.canvas.mpl_disconnect(cid)
-    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax, cid))   # connect key press event  
+    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4))   # connect key press event  
     ax.grid(True)
     fig.canvas.draw()
 
