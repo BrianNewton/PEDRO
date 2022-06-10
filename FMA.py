@@ -14,64 +14,19 @@
 from math import nan
 import sys
 import matplotlib.pyplot as plt
-import matplotlib.lines as lines
 import numpy as np
 import random
-import csv
 import datetime
 import os
 import re
 import tkinter
 import tkinter.filedialog
 import xlsxwriter
-from os.path import  join
 import PySimpleGUI as sg
 import traceback
 
+from utils import draggable_lines
 
-
-
-# draggable lines for user determined peak bounds
-class draggable_lines:
-    def __init__(self, ax, start_coordinate, x_bounds, y_bounds):
-        self.ax = ax
-        self.c = ax.get_figure().canvas
-        self.x_bounds = x_bounds
-        self.y_bounds = y_bounds
-        self.press = None
-
-        self.line = lines.Line2D([start_coordinate, start_coordinate], y_bounds, color='r', picker=5)
-
-        self.ax.add_line(self.line)
-        self.c.draw_idle()
-        self.sid = self.c.mpl_connect('button_press_event', self.on_press)
-        self.sid = self.c.mpl_connect('motion_notify_event', self.on_motion)
-        self.sid = self.c.mpl_connect('button_release_event', self.on_release)
-
-
-    def on_press(self, event):
-        if abs(event.xdata - self.line.get_xdata()[0]) < 3:
-            self.press = (self.line.get_xdata()[0], event.xdata)
-        return
-    
-    def on_motion(self, event):
-        if self.press == None:
-            return 
-        try: 
-            x0, xpress = self.press
-            dx = event.xdata - xpress
-            if self.x_bounds[0] >= (x0 + dx):
-                self.line.set_xdata([self.x_bounds[0],self.x_bounds[0]])
-            elif (x0 + dx) >= self.x_bounds[1]:
-                self.line.set_xdata([self.x_bounds[1], self.x_bounds[1]])
-            else:
-                self.line.set_xdata([x0+dx, x0+dx])
-        except:
-            pass
-    
-    def on_release(self, event):
-        self.press = None
-        self.c.draw_idle()
 
 
 # sample object, one created for each individual sample
@@ -206,6 +161,8 @@ def obtain_peaks(samples, FMA):
     i = 0
     fig, ax = plt.subplots()
     fig.set_size_inches(6,6)
+    line_L = draggable_lines(ax, samples[i].start_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].end_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())     # right draggable boundary line
     cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid))   # connect key press event
     plt.grid(True)
     plt.ion()
@@ -470,8 +427,6 @@ if __name__ == "__main__":
     os.system('cls' if os.name == 'nt' else 'clear')
     print("================================================================================")
     print("=========================== FMA data processing tool ===========================")
-    #print("================================================================================")
-    #print("======= For any questions or concerns please email btnewton@uwaterloo.ca =======")
     print("================================================================================\n")
     
     root = tkinter.Tk()
@@ -481,92 +436,11 @@ if __name__ == "__main__":
     print("Choose FMA data file:")
     FMA_data = tkinter.filedialog.askopenfilename(title = "Choose FMA data file")
 
-
-    # Parse sample and FMA data from passed text files
-    try:
-        print("Start data parsing")
-        samples, FMA = input_data(sample_data, FMA_data)
-    except:
-        print("Error parsing data, please ensure your data files are named correctly")
-        sys.exit(1)
-    else:
-        print("Data parsing complete")
-
-
-    # Add end times to each sample, for the sake of plotting
-    try:
-        print("Start sample processing")
-        process_samples(samples, FMA)
-    except:
-        print("Error processing data, please ensure data files are formatted correctly")
-        sys.exit(1)
-    else:
-        print("Sample processing complete")
-
-
-    # Plot each sample time range, have user set peak bounds
-    try:
-        print("Obtain peak bounds")
-        obtain_peaks(samples, FMA)
-    except:
-        print("Error obtaining peak bounds")
-        sys.exit(1)
-    else:
-        print("Peak bounds determination complete")
-
-
-    # Trim extraneous data outside of user set bounds
-    try:
-        print("Trimming sample data")
-        standardize(samples, FMA)
-    except:
-        print("Error trimming sample data")
-        sys.exit(1)
-    else:
-        print("Data trimming complete")
-
-
-    # Determine peak areas
-    try:
-        print("Determining peak areas")
-        peak_areas(samples)
-    except:
-        print("Error determining peak areas")
-        sys.exit(1)
-    else:  
-        print("Peak area determination complete")
-
-
-    # Generate linear model of the form, CH4 ppm = m * area + b
-    try:
-        print("Generating linear model")
-        m, b, R2 = linear_model(samples, FMA)
-    except:
-        print("Error generating linear model")
-        sys.exit(1)
-    else:
-        print("Linear model generation complete")
-
-    # Calculate CH4 concentration of each sample
-    try:
-        print("Calculating CH4 concentrations")
-        concentrations(samples, m, b)
-    except:
-        print("Error calculating CH4 concentrations")
-        sys.exit(1)
-    else:
-        print("CH4 calculation complete")
-
-
-    out = outputData(samples, m, b, R2)
-    # Output data in csv file
-    #try:
-    #    print("Outputting results")
-    #    out = outputData(samples, m, b, R2, folder)
-    #except:
-    #    print("Error creating output file")
-    #    sys.exit(1)
-    #else:
-    #    print("Outputting results complete")
-
-    print("FMA data analysis complete! The results have been outputted to: " + out)
+    samples, FMA = input_data(sample_data, FMA_data)
+    process_samples(samples, FMA)
+    obtain_peaks(samples, FMA)
+    standardize(samples, FMA)
+    peak_areas(samples)
+    m, b, R2 = linear_model(samples, FMA)
+    concentrations(samples, m, b)
+    out = outputData(samples, m, b, R2) 

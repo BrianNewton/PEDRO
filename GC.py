@@ -1,9 +1,7 @@
-from math import nan
 from math import isnan
-import os
 import glob
-from tracemalloc import start
 import xlsxwriter
+import os
 import re
 import tabula
 import pandas as pd
@@ -12,7 +10,8 @@ import tkinter.filedialog
 from pdfminer import high_level
 import PySimpleGUI as sg
 import traceback
-from LICOR import linear_regression
+
+from utils import linear_regression
         
 
 
@@ -94,14 +93,15 @@ def process_PDFs(samples, standards, sample_rows, PDFs, window, regex, count):
         if len(file) > longest_file_name:
             longest_file_name = len(file)
 
-        # generate progress bar
-        event, values = window.read(timeout=10)
-        window['-PROG-'].update(counter + 1)
-        counter += 1
-        if file == 'merged.pdf':
-            continue
+        if window:
+            # generate progress bar
+            event, values = window.read(timeout=10)
+            window['-PROG-'].update(counter + 1)
+            counter += 1
+            if file == 'merged.pdf':
+                continue
 
-        print("Processing: " + file)
+            print("Processing: " + file)
 
         # get tables from pdf merge all gas concentration tables split between pages
         tables = tabula.read_pdf(file, pages = 'all')
@@ -202,16 +202,16 @@ def flatten(something):
     list_o_list = []
     for k, v in something.items():
         key_list = [k]
-        helper(v, key_list, list_o_list)
+        flatten_helper(v, key_list, list_o_list)
     return list_o_list
 
 
 # recursive helper for flattener
-def helper(val, key_list, list_o_list):
+def flatten_helper(val, key_list, list_o_list):
     if isinstance(val, dict):
         for k, v in val.items():
             key_list.append(k)
-            helper(v, key_list, list_o_list)
+            flatten_helper(v, key_list, list_o_list)
             key_list.pop()
     else:
         list_o_list.append(key_list + val)
@@ -340,6 +340,10 @@ def output_data(samples, standards, longest_file_name, columns, dates, count):
     return out
 
 
+#########################################################################################################################
+######################################## script execution starts here! ##################################################
+#########################################################################################################################
+
 
 def GC():
     sample_rows = {}
@@ -463,3 +467,35 @@ def GC():
 
     window.close()
     return 0
+
+
+if __name__ == "__main__":
+
+    os.system('cls' if os.name == 'nt' else 'clear')
+    print("================================================================================")
+    print("============================ GC data processing tool ===========================")
+    print("================================================================================\n") 
+
+    sample_rows = {}
+    samples = {}
+    standards = {}
+
+    root = tkinter.Tk()
+    root.withdraw()
+    print("Choose PDF files folder:")
+    folder = tkinter.filedialog.askdirectory(title = "Choose folder")
+    regex = input("Enter a regex: ")
+    columns = input("Enter columns: ").split(', ')
+    standards = input("Enter standards").split(', ')
+    calculate_flux = ''
+    while calculate_flux.lower() != 'n' and calculate_flux.lower() != 'y':
+        calculate_flux = input("Calculate flux? (y/n)")
+
+
+    PDFs = get_PDFs(folder)
+    regex, count = process_regex(regex)
+    samples, standards, sample_rows, longest_file_name, dates = process_PDFs(samples, standards, sample_rows, PDFs, False, regex, count)
+    if calculate_flux == 'y':
+        flux(samples, count)
+    samples = flatten(samples)
+    out = output_data(samples, standards, longest_file_name, columns, dates, count)

@@ -1,6 +1,7 @@
 from FMA import FMA
 from LICOR import LICOR
 from GC import GC
+from IRGA_EGM5 import IRGA
 import traceback
 import PySimpleGUI as sg
 
@@ -23,7 +24,7 @@ def error_screen(e):
 layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Text("\"Peatland Equipment Data Re-Organizer\"", font ='italic', background_color="#DF4A4A")],
     [sg.Text(background_color="#DF4A4A")],
-    [sg.Text("Select an option bellow:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC"), sg.Button("IRGA (coming soon!)")]]
+    [sg.Text("Select an option bellow:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC"), sg.Button("IRGA EGM-5")]]
 
 # Create the window
 window = sg.Window("PEDRO", layout, margins=(60, 20), background_color="#DF4A4A")
@@ -62,6 +63,14 @@ while True:
             print(traceback.format_exc())
             error_screen(e)
         window.UnHide()
+    elif event == "IRGA EGM-5":
+        window.Hide()
+        try:
+            print("===== IRGA =====")
+            IRGA()
+        except Exception as e:
+            print(traceback.format_exc())
+            error_screen(e)
 
 window.close()
 
