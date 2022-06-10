@@ -9,12 +9,9 @@
 
 
 from math import floor
-import math
 import sys
-import tkinter
 import re
 import matplotlib.pyplot as plt
-import matplotlib.lines as lines
 from matplotlib.offsetbox import AnchoredText
 import os
 import tkinter
@@ -23,49 +20,8 @@ import xlsxwriter
 import PySimpleGUI as sg
 import traceback
 
-
-# draggable lines for user cuts
-class draggable_lines:
-    def __init__(self, ax, start_coordinate, x_bounds, y_bounds):
-        self.ax = ax
-        self.c = ax.get_figure().canvas
-        self.x_bounds = x_bounds
-        self.y_bounds = y_bounds
-        self.press = None
-
-        self.line = lines.Line2D([start_coordinate, start_coordinate], y_bounds, color='r', picker=5)
-
-        self.ax.add_line(self.line)
-        self.c.draw_idle()
-        self.sid = self.c.mpl_connect('button_press_event', self.on_press)
-        self.sid = self.c.mpl_connect('motion_notify_event', self.on_motion)
-        self.sid = self.c.mpl_connect('button_release_event', self.on_release)
-
-
-    def on_press(self, event):
-        if abs(event.xdata - self.line.get_xdata()[0]) < 3:
-            self.press = (self.line.get_xdata()[0], event.xdata)
-        return
+from utils import draggable_lines, linear_regression
     
-    def on_motion(self, event):
-        if self.press == None:
-            return 
-        try: 
-            x0, xpress = self.press
-            dx = event.xdata - xpress
-            if self.x_bounds[0] >= (x0 + dx):
-                self.line.set_xdata([self.x_bounds[0],self.x_bounds[0]])
-            elif (x0 + dx) >= self.x_bounds[1]:
-                self.line.set_xdata([self.x_bounds[1], self.x_bounds[1]])
-            else:
-                self.line.set_xdata([x0+dx, x0+dx])
-        except:
-            pass
-    
-    def on_release(self, event):
-        self.press = None
-        self.c.draw_idle()
-      
 
 # Flux object
 class Flux:
@@ -343,37 +299,6 @@ def prune(fluxes, CO2_or_CH4):
         fig.canvas.start_event_loop(0.05)
 
 
-def linear_regression(X, Y):
-    # simple linear regression
-    sumX = sum(X)
-    sumY = sum(Y)
-    meanX = sumX/len(X)
-    meanY = sumY/len(Y)
-
-    SSx = 0 # sum of squares
-    SP = 0  # sum of products
-
-    for i in range(len(X)):
-        SSx = SSx + (X[i] - meanX) ** 2
-        SP = SP + (X[i] - meanX)*(Y[i] - meanY)
-
-    # generates slope and intercept based on standards and baseline samples
-    m = SP/SSx
-    b = meanY - m * meanX
-
-    SS_res = 0
-    SS_t = 0
-
-    for i in range(len(X)):
-        SS_res = SS_res + (Y[i] - X[i]*m - b) ** 2
-        SS_t = SS_t + (Y[i] - meanY) ** 2
-    
-    R2 = 1 - SS_res/SS_t    # coefficient of determination
-
-    return m, b, R2
-
-
-
 # performs linear regression to generate linear gas concentration rate of change per minute
 def flux_calculation(fluxes, CO2_or_CH4):
     for flux in fluxes:
@@ -618,16 +543,6 @@ if __name__ == "__main__":
     while CO2_or_CH4.lower() != 'co2' and CO2_or_CH4.lower() != 'ch4':
         CO2_or_CH4 = input("Which flux to measure? (type \"CO2\" or \"CH4\"): ")
     
-    # prompt user for chamber volume
-    good_vol = False
-    while good_vol == False:
-        try:
-            Vol = float(input("Enter chamber volume in Litres: "))
-        except ValueError:
-            print("Error: not a number!")
-        else:
-            good_vol = True
-
     # prompt user for site name
     site = input("Enter the site name: ")
 
@@ -636,6 +551,6 @@ if __name__ == "__main__":
 
     fluxes = input_data(field_data, licor_data, CO2_or_CH4)
     prune(fluxes, CO2_or_CH4)
-    linear_regression(fluxes, Vol, CO2_or_CH4)
+    flux_calculation(fluxes, CO2_or_CH4)
     offsets(fluxes)
-    out = outputData(fluxes, site, date, CO2_or_CH4, Vol)
+    out = outputData(fluxes, site, date, CO2_or_CH4)
