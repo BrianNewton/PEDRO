@@ -78,8 +78,10 @@ class draggable_lines:
 class sample:
     def __init__(self, name, time):
         self.name = name                # sample name
-        self.start_time = float(time)   # sample start time
-        self.end_time = nan             # sample end time
+        self.start_time = float(time)        # sample start time
+        self.end_time = nan                  # sample end time
+        self.peak_start_time = float(time)   # peak start time
+        self.peak_end_time = nan             # peak end time
         self.times = []                 # FMA times between sample start and end times
         self.concentrations = []        # FMA concentrations between sample start and end times
         self.area = nan                 # sample peak area
@@ -138,9 +140,9 @@ def input_data(sample_data, FMA_data):
 def process_samples(samples, FMA):
     for i in range(len(samples)):
         if i < len(samples) - 1:
-            samples[i].end_time = float(samples[i + 1].start_time)
+            samples[i].peak_end_time = float(samples[i + 1].peak_start_time)
         else:
-            samples[i].end_time = float(FMA[-1][0]) # if last sample, set end time to the end of the FMA data
+            samples[i].peak_end_time = float(FMA[-1][0]) # if last sample, set end time to the end of the FMA data
 
 
 # process button press for plot
@@ -148,8 +150,8 @@ def on_press(event, i, samples, line_L, line_R, FMA, fig, ax, cid):
     sys.stdout.flush()
 
     # when changing samples, obtain newly set start and end times from the positions of the user set bounds
-    samples[i].start_time = line_L.line.get_xdata()[0]
-    samples[i].end_time = line_R.line.get_xdata()[0]
+    samples[i].peak_start_time = line_L.line.get_xdata()[0]
+    samples[i].peak_end_time = line_R.line.get_xdata()[0]
 
     # right arrow key moves to the next sample, or exits if currently on the last sample
     if event.key == 'right' or event.key == 'space':
@@ -172,9 +174,9 @@ def draw_plot(i, samples, FMA, fig, ax, cid):
     # if sample hasn't already been processed
     if len(samples[i].times) == 0:
         for j in range(len(FMA)):
-            if abs(float(samples[i].start_time) - float(FMA[j][0])) < 1:
+            if abs(float(samples[i].peak_start_time) - float(FMA[j][0])) < 1:
                 FMA_start = j
-            if abs(float(samples[i].end_time) - float(FMA[j][0])) < 1:
+            if abs(float(samples[i].peak_end_time) - float(FMA[j][0])) < 1:
                 FMA_end = j
         for k in range(FMA_start, FMA_end):
             samples[i].times.append(float(FMA[k][0]))
@@ -184,8 +186,8 @@ def draw_plot(i, samples, FMA, fig, ax, cid):
     ax = fig.add_subplot()
     plt.plot(samples[i].times, samples[i].concentrations, linewidth = 2.0)
 
-    line_L = draggable_lines(ax, samples[i].start_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].end_time, [samples[i].start_time, samples[i].end_time], plt.gca().get_ylim())     # right draggable boundary line
+    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations)], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations)], plt.gca().get_ylim())     # right draggable boundary line
 
     # if currently on the last sample, change header information, otherwise set title to user controls
     if i == len(samples) - 1:
@@ -229,11 +231,11 @@ def standardize(samples, FMA):
 
         # trims sample time and concentration sets
         for i in range(len(samples[j].times)):
-            if abs(samples[j].start_time - samples[j].times[i]) < start_temp:
-                start_temp = abs(samples[j].start_time - samples[j].times[i])
+            if abs(samples[j].peak_start_time - samples[j].times[i]) < start_temp:
+                start_temp = abs(samples[j].peak_start_time - samples[j].times[i])
                 FMA_start = i
-            if abs(samples[j].end_time - samples[j].times[i]) < end_temp:
-                end_temp = abs(samples[j].end_time - samples[j].times[i])
+            if abs(samples[j].peak_end_time - samples[j].times[i]) < end_temp:
+                end_temp = abs(samples[j].peak_end_time - samples[j].times[i])
                 FMA_end = i
 
         # trim sample times and concentrations 
@@ -352,7 +354,7 @@ def outputData(samples, m, b, R2):
     row = 8
 
     for i in range(len(samples)):
-        worksheet.write_row(row, 0, [samples[i].name, samples[i].start_time, samples[i].end_time, samples[i].area, "=D{}*B4+B5".format(str(row + 1))])
+        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area, "=D{}*B4+B5".format(str(row + 1))])
         row += 1
 
     workbook.close()
