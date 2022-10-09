@@ -370,8 +370,8 @@ def FMA():
 
     layout = [[sg.Text('FMA Data Processing Tool', font='Any 36', background_color='#5DBF06')],
         [sg.Text("", background_color='#5DBF06')],
-        [sg.Text('Sample data file:', size=(15, 1), background_color='#5DBF06'), sg.Input(key='-SAMPLES-'), sg.FileBrowse()],
-        [sg.Text('FMA data file:', size=(15, 1), background_color='#5DBF06'), sg.Input(key='-FMA-'), sg.FileBrowse()],
+        [sg.Text('Sample data file: (.csv, .txt)', size=(21, 1), background_color='#5DBF06'), sg.Input(key='-SAMPLES-'), sg.FileBrowse()],
+        [sg.Text('FMA data file: (.csv, .txt)', size=(21, 1), background_color='#5DBF06'), sg.Input(key='-FMA-'), sg.FileBrowse()],
         [sg.Text("", background_color='#5DBF06')],
         [sg.Submit(), sg.Cancel()]]
 

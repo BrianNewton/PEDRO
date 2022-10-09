@@ -510,8 +510,8 @@ def LICOR():
 
     layout = [[sg.Text('LICOR Data Processing Tool', font='Any 36', background_color='#DF954A')],
         [sg.Text("", background_color='#DF954A')],
-        [sg.Text('Field data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
-        [sg.Text('LICOR data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
+        [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
+        [sg.Text('LICOR data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
         [sg.Text('Gas to analyze:', size=(15, 1), background_color='#DF954A'), sg.Radio('CO2', 'RADIO2', enable_events=True, default=False, key='-CO2-', background_color='#DF954A'), sg.Radio('CH4', 'RADIO2',enable_events=True, default=True, key='-CH4-', background_color='#DF954A')],
         [sg.Text("Site name:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-SITE-')],
         [sg.Text("Date:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-DATE-')],
