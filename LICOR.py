@@ -304,6 +304,7 @@ def draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4):
     at = AnchoredText(
         r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=15), frameon=True, loc='upper center')
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+    at.patch.set_alpha(0.5)
     ax.add_artist(at)
     
     plt.plot(fluxes[i].pruned_times, fluxes[i].pruned_CH4, linewidth = 2.0)
