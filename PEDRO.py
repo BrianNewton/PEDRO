@@ -23,7 +23,11 @@ def error_screen(e):
 layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Text("\"Peatland Equipment Data Re-Organizer\"", font ='italic', background_color="#DF4A4A")],
     [sg.Text(background_color="#DF4A4A")],
-    [sg.Text("Select an option below:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC"), sg.Button("IRGA (coming soon!)")]]
+    [sg.Text("Select an option below:", background_color="#DF4A4A")], 
+    [sg.Button("FMA"), sg.Button("LICOR (flux)"), sg.Button("LICOR (samples)"), sg.Button("GC")],
+    [sg.Button("IRGA (coming soon!)"), sg.Button("LGR (flux) (coming soon!)"), sg.Button("LGR (samples) (coming soon!)")],
+    [sg.Text(background_color="#DF4A4A")],
+    [sg.Text("v2.0",background_color="#DF4A4A")]]
 
 # Create the window
 window = sg.Window("PEDRO", layout, margins=(60, 20), background_color="#DF4A4A")
@@ -35,7 +39,7 @@ while True:
     # presses the OK button
     if event == "QUIT" or event == sg.WIN_CLOSED:
         break
-    elif event == "LICOR":
+    elif event == "LICOR (flux)":
         window.Hide()
         try:
             print("===== LICOR =====")
