@@ -5,6 +5,7 @@ import matplotlib.lines as lines
 import numpy as np
 import random
 import csv
+import math
 import datetime
 import os
 import re
@@ -69,9 +70,12 @@ class sample:
         self.peak_start_time = float(time)   # peak start time
         self.peak_end_time = nan             # peak end time
         self.times = []                 # FMA times between sample start and end times
-        self.concentrations = []        # FMA concentrations between sample start and end times
-        self.area = nan                 # sample peak area
+        self.concentrations_CH4 = []        # FMA concentrations between sample start and end times
+        self.area_CH4 = nan                 # sample peak area
         self.CH4 = nan                  # sample CH4 concentration
+        self.concentrations_CO2 = []
+        self.area_CO2 = nan
+        self.CO2 = nan
 
 
 def input_data(sample_data, LICOR_data):
@@ -165,21 +169,26 @@ def draw_plot(i, samples, LICOR, fig, ax, cid):
     
     # if sample hasn't already been processed
     if len(samples[i].times) == 0:
+
+        LICOR_start = 0
+        LICOR_end = 0
+
         for j in range(len(LICOR)):
-            if abs(float(samples[i].peak_start_time) - float(LICOR[j][0])) < 1:
+            if float(samples[i].peak_start_time) - float(LICOR[j][0]) < 0 and LICOR_start == 0:
                 LICOR_start = j
-            if abs(float(samples[i].peak_end_time) - float(LICOR[j][0])) < 1:
+            if float(samples[i].peak_end_time) - float(LICOR[j][0]) < 0 and LICOR_end == 0:
                 LICOR_end = j
-        for k in range(LICOR_start, LICOR_end):
+        for k in range(math.floor(LICOR_start), math.ceil(LICOR_end)):
             samples[i].times.append(float(LICOR[k][0]))
-            samples[i].concentrations.append(float(LICOR[k][1]))
+            samples[i].concentrations_CH4.append(float(LICOR[k][1]))
+            samples[i].concentrations_CO2.append(float(LICOR[k][2]))
 
     fig.clear()
     ax = fig.add_subplot()
-    plt.plot(samples[i].times, samples[i].concentrations, linewidth = 2.0)
+    plt.plot(samples[i].times, samples[i].concentrations_CH4, linewidth = 2.0)
 
-    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations)], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations)], plt.gca().get_ylim())     # right draggable boundary line
+    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())     # right draggable boundary line
 
     # if currently on the last sample, change header information, otherwise set title to user controls
     if i == len(samples) - 1:
@@ -234,7 +243,8 @@ def standardize(samples, LICOR):
 
         # trim sample times and concentrations 
         samples[j].times = samples[j].times[LICOR_start: LICOR_end + 1]
-        samples[j].concentrations = samples[j].concentrations[LICOR_start: LICOR_end + 1]
+        samples[j].concentrations_CH4 = samples[j].concentrations_CH4[LICOR_start: LICOR_end + 1]
+        samples[j].concentrations_CO2 = samples[j].concentrations_CO2[LICOR_start: LICOR_end + 1]
 
         # cuts out sample from overall FMA data (used for baseline sampling in generating linear model)
         for k in range(len(LICOR)):
@@ -250,23 +260,34 @@ def peak_areas(samples):
     for i in range(len(samples)):
 
         # determines whether the sample has a positive or negative peak based on the value of the middle relative to the beginning
-        if samples[i].concentrations[int(len(samples[i].concentrations)/2)] < samples[i].concentrations[0]: # negative peak
-            baseline = max(samples[i].concentrations)
+        if samples[i].concentrations_CH4[int(len(samples[i].concentrations_CH4)/2)] < samples[i].concentrations_CH4[0]: # negative peak
+            baseline_CH4 = max(samples[i].concentrations_CH4)
         else: # positive peak
-            baseline = min(samples[i].concentrations)
-        area = 0
+            baseline_CH4 = min(samples[i].concentrations_CH4)
+        area_CH4 = 0
+
+        if samples[i].concentrations_CO2[int(len(samples[i].concentrations_CO2)/2)] < samples[i].concentrations_CO2[0]: # negative peak
+            baseline_CO2 = max(samples[i].concentrations_CO2)
+        else: # positive peak
+            baseline_CO2 = min(samples[i].concentrations_CO2)
+        area_CO2 = 0
 
         # integrate concentration data points with respect to time
         for j in range(len(samples[i].times)):
             if j < len(samples[i].times) - 1:
-                area = area + (samples[i].concentrations[j] - baseline)*(samples[i].times[j + 1] - samples[i].times[j])
-        samples[i].area = area
+                area_CH4 = area_CH4 + (samples[i].concentrations_CH4[j] - baseline_CH4)*(samples[i].times[j + 1] - samples[i].times[j])
+                area_CO2 = area_CO2 + (samples[i].concentrations_CO2[j] - baseline_CO2)*(samples[i].times[j + 1] - samples[i].times[j])
+        samples[i].area_CH4 = area_CH4
+        samples[i].area_CO2 = area_CO2
 
 
 # performs linear regression to generate linear relationship between peak areas and CH4 concentration
 def linear_model(samples, LICOR):
-    X = []
-    Y = []
+    X_CH4 = []
+    Y_CH4 = []
+
+    X_CO2 = []
+    Y_CO2 = []
 
     
     one_ppm_regex = r"1\s?ppm"
@@ -277,79 +298,132 @@ def linear_model(samples, LICOR):
     # extracts standards from samples
     for i in range(len(samples)):
         if re.search(one_ppm_regex, samples[i].name):
-            Y.append(1)
-            X.append(samples[i].area)
+            Y_CH4.append(1)
+            X_CH4.append(samples[i].area_CH4)
+
+            Y_CO2.append(307)
+            X_CO2.append(samples[i].area_CO2)
+
         if re.search(five_ppm_regex, samples[i].name):
-            Y.append(5)
-            X.append(samples[i].area)
+            Y_CH4.append(5)
+            X_CH4.append(samples[i].area_CH4)
+
+            Y_CO2.append(100)
+            X_CO2.append(samples[i].area_CO2)
+
         if re.search(fifty_ppm_regex, samples[i].name):
-            Y.append(50.6)
-            X.append(samples[i].area)
+            Y_CH4.append(50.6)
+            X_CH4.append(samples[i].area_CH4)
+
+            Y_CO2.append(497)
+            X_CO2.append(samples[i].area_CO2)
 
     # for each set of standards, generates a random non-sample baseline data point
-    numStandards = len(X)
+    numStandards = len(X_CH4)
 
     if numStandards == 0:
         return(1, 1, 1)
 
     for i in range(numStandards):
-        Y.append(float(LICOR[random.randint(0, len(LICOR))][1]))
-        X.append(0)
+        Y_CH4.append(float(LICOR[random.randint(0, len(LICOR))][1]))
+        X_CH4.append(0)
+
+        Y_CO2.append(float(LICOR[random.randint(0, len(LICOR))][2]))
+        X_CO2.append(0)
 
     # simple linear regression
-    sumX = sum(X)
-    sumY = sum(Y)
-    meanX = sumX/len(X)
-    meanY = sumY/len(Y)
+    sumX_CH4 = sum(X_CH4)
+    sumY_CH4 = sum(Y_CH4)
+    meanX_CH4 = sumX_CH4/len(X_CH4)
+    meanY_CH4 = sumY_CH4/len(Y_CH4)
 
-    SSx = 0 # sum of squares
-    SP = 0  # sum of products
+    sumX_CO2 = sum(X_CO2)
+    sumY_CO2 = sum(Y_CO2)
+    meanX_CO2 = sumX_CO2/len(X_CO2)
+    meanY_CO2 = sumY_CO2/len(Y_CO2)
 
-    for i in range(len(X)):
-        SSx = SSx + (X[i] - meanX) ** 2
-        SP = SP + (X[i] - meanX)*(Y[i] - meanY)
+
+
+    SSx_CH4 = 0 # sum of squares
+    SP_CH4 = 0  # sum of products
+
+    SSx_CO2 = 0
+    SP_CO2 = 0
+
+    for i in range(len(X_CH4)):
+        SSx_CH4 = SSx_CH4 + (X_CH4[i] - meanX_CH4) ** 2
+        SP_CH4 = SP_CH4 + (X_CH4[i] - meanX_CH4)*(Y_CH4[i] - meanY_CH4)
+
+        SSx_CO2 = SSx_CO2 + (X_CO2[i] - meanX_CO2) ** 2
+        SP_CO2 = SP_CO2 + (X_CO2[i] - meanX_CO2)*(Y_CO2[i] - meanY_CO2)
 
     # generates slope and intercept based on standards and baseline samples
-    m = SP/SSx
-    b = meanY - m * meanX
+    m_CH4 = SP_CH4/SSx_CH4
+    b_CH4 = meanY_CH4 - m_CH4 * meanX_CH4
 
-    SS_res = 0
-    SS_t = 0
+    m_CO2 = SP_CO2/SSx_CO2
+    b_CO2 = meanY_CO2 - m_CO2 * meanX_CO2
 
-    for i in range(len(X)):
-        SS_res = SS_res + (Y[i] - X[i]*m - b) ** 2
-        SS_t = SS_t + (Y[i] - meanY) ** 2
+    SS_res_CH4 = 0
+    SS_t_CH4 = 0
+
+    SS_res_CO2 = 0
+    SS_t_CO2 = 0
+
+    for i in range(len(X_CH4)):
+        SS_res_CH4 = SS_res_CH4 + (Y_CH4[i] - X_CH4[i]*m_CH4 - b_CH4) ** 2
+        SS_t_CH4 = SS_t_CH4 + (Y_CH4[i] - meanY_CH4) ** 2
+
+        SS_res_CO2 = SS_res_CO2 + (Y_CO2[i] - X_CO2[i]*m_CO2 - b_CO2) ** 2
+        SS_t_CO2 = SS_t_CO2 + (Y_CO2[i] - meanY_CO2) ** 2
     
-    R2 = 1 - SS_res/SS_t    # coefficient of determination
+    R2_CH4 = 1 - SS_res_CH4/SS_t_CH4    # coefficient of determination
+    R2_CO2 = 1 - SS_res_CO2/SS_t_CO2
 
-    return(m, b, R2)
+    return(m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2)
 
 
 # For each sample uses the determined linear model to determine sample CH4 concentration
-def concentrations(samples, m, b):
+def concentrations(samples, m_CH4, b_CH4, m_CO2, b_CO2):
     for i in range(len(samples)):
-        CH4 = samples[i].area * m + b
+        CH4 = samples[i].area_CH4 * m_CH4 + b_CH4
+        CO2 = samples[i].area_CO2 * m_CO2 + b_CO2
         samples[i].CH4 = CH4
+        samples[i].CO2 = CO2
 
 
 # outputs data to csv file
-def outputData(samples, m, b, R2):
+def outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2):
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
 
     worksheet = workbook.add_worksheet("Results")
     worksheet.write_row(0, 0, ["Date: ", str(datetime.datetime.now().replace(microsecond=0))])
-    worksheet.write_row(2, 0, ["Linear model:"])
-    worksheet.write_row(3, 0, ["m:", m])
-    worksheet.write_row(4, 0, ["b:", b])
-    worksheet.write_row(5, 0, ["R2:", R2])
-    worksheet.write_row(7, 0, ["Sample name", "Start time (s)", "End time (s)", "Peak area", "CH4 concentration (ppm)"])
+    worksheet.write_row(2, 0, ["Linear model (CH4):", "", "", "Linear model (CO2):"])
+    worksheet.write_row(3, 0, ["m:", m_CH4, "", "m", m_CO2])
+    worksheet.write_row(4, 0, ["b:", b_CH4, "", "b", b_CO2])
+    worksheet.write_row(5, 0, ["R2:", R2_CH4, "", "R2", R2_CO2])
+    worksheet.write_row(7, 0, ["Sample name", "Start time", "End time", "CH4 peak area", "CH4 concentration (ppm)", "CO2 peak area", "CO2 concentration (ppm)"])
 
     row = 8
 
+    longest_name = 0
+
     for i in range(len(samples)):
-        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area, "=D{}*B4+B5".format(str(row + 1))])
+        if len(samples[i].name) > longest_name:
+            longest_name = len(samples[i].name)
+        samples[i].peak_start_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_start_time // 60) // 60), int((samples[i].peak_start_time // 60) % 60), int((samples[i].peak_start_time % 60))) 
+        samples[i].peak_end_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_end_time // 60) // 60), int((samples[i].peak_end_time // 60) % 60), int(samples[i].peak_end_time % 60)) 
+        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area_CH4, "=D{}*B4+B5".format(str(row + 1)), samples[i].area_CO2, "=D{}*E4+E5".format(str(row + 1))])
         row += 1
+
+    worksheet.set_column(0, 0, longest_name)
+    worksheet.set_column(1, 1, len("Start time"))
+    worksheet.set_column(2, 2, len("End time"))
+    worksheet.set_column(3, 3, len("CH4 peak area"))
+    worksheet.set_column(4, 4, len("CH4 concentration (ppm)"))
+    worksheet.set_column(5, 5, len("CO2 peak area"))
+    worksheet.set_column(6, 6, len("CO2 concentration (ppm)"))
 
     workbook.close()
     return out
@@ -436,7 +510,7 @@ def LICOR_Samples():
 
         try:
             print("Generating linear model")
-            m, b, R2 = linear_model(samples, LICOR)
+            m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2 = linear_model(samples, LICOR)
         except:
             window.close()
             print(traceback.format_exc())
@@ -444,7 +518,7 @@ def LICOR_Samples():
 
         try:
             print("Calculating concentrations")
-            concentrations(samples, m, b)
+            concentrations(samples, m_CH4, b_CH4, m_CO2, b_CO2)
         except:
             window.close()
             print(traceback.format_exc())
@@ -452,7 +526,7 @@ def LICOR_Samples():
 
         try:
             print("Outputting data")
-            out = outputData(samples, m, b, R2) 
+            out = outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2) 
         except:
             window.close()
             print(traceback.format_exc())
