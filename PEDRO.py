@@ -56,6 +56,7 @@ while True:
         except Exception as e:
             print(traceback.format_exc())
             error_screen(e)
+        window.UnHide()
     elif event == "FMA":
         window.Hide()
         try:
