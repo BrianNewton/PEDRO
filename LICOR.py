@@ -80,6 +80,8 @@ def input_data(field_data, licor_data, CO2_or_CH4):
     LICOR_CH4_regex = r"CH4"
     LICOR_CO2_regex = r"CO2"
 
+    time_regex = r"(\d*):(\d*):(\d*)"
+
     collar_index = 0
     l_or_d_index = 1
     start_time_index = 2
@@ -119,6 +121,10 @@ def input_data(field_data, licor_data, CO2_or_CH4):
         x = line.replace('\t', ',').replace(';', ',').split(",")
         for i in range(len(x)):
             x[i] = x[i].strip(' \t\n\r')
+        if not re.search(time_regex, x[start_time_index], re.IGNORECASE):
+            raise Exception("Error: Start time for flux {} is not formatted correctly. Please ensure all times are in 24h HH:MM:SS format.".format(x[collar_index]))
+        if not re.search(time_regex, x[end_time_index], re.IGNORECASE):
+            raise Exception("Error: End time for flux {} is not formatted correctly. Please ensure all times are in 24h HH:MM:SS format.".format(x[collar_index]))
         fluxes.append(Flux(x[collar_index], x[l_or_d_index], x[start_time_index], x[end_time_index], x[start_temp_index], x[end_temp_index], float(x[chamber_height_index]), float(x[surface_area_index])))
     f.close()
 
@@ -150,31 +156,32 @@ def input_data(field_data, licor_data, CO2_or_CH4):
         print(flux.name)
         for line in f:
             x = line.replace('\t', ',').replace(';', ',').split(',')
-            for k in range(len(x)):
-                x[k] = x[k].strip(' \t\n\r')
-            if len(x) == 2:
-                continue
-            if in_flux == 0:    # if current line in LICOR data isn't in a flux, check to see if it's the start time of the next flux
-                if x[LICOR_time_index] == flux.start_time:
-                    in_flux = 1
-                    start_seconds = float(x[1])
+            if x[0] == "DATA":
+                for k in range(len(x)):
+                    x[k] = x[k].strip(' \t\n\r')
+                if len(x) == 2:
+                    continue
+                if in_flux == 0:    # if current line in LICOR data isn't in a flux, check to see if it's the start time of the next flux
+                    if x[LICOR_time_index] == flux.start_time:
+                        in_flux = 1
+                        start_seconds = float(x[1])
+                        times.append(float(x[1]) - start_seconds)
+                        CH4.append(float(x[index]))
+                elif in_flux == 1:  # if current line in LICOR data is in a flux, append the time and gas concentration to flux
                     times.append(float(x[1]) - start_seconds)
                     CH4.append(float(x[index]))
-            elif in_flux == 1:  # if current line in LICOR data is in a flux, append the time and gas concentration to flux
-                times.append(float(x[1]) - start_seconds)
-                CH4.append(float(x[index]))
-                if x[LICOR_time_index] == flux.end_time:  # if current line in LICOR data is the end time of the current flux, finalize times and concentrations sets and stop
-                    flux.times = times
-                    flux.CH4 = CH4
-                    flux.pruned_times = times
-                    flux.pruned_CH4 = CH4
-                    flux.original_length = len(times)
+                    if x[LICOR_time_index] == flux.end_time:  # if current line in LICOR data is the end time of the current flux, finalize times and concentrations sets and stop
+                        flux.times = times
+                        flux.CH4 = CH4
+                        flux.pruned_times = times
+                        flux.pruned_CH4 = CH4
+                        flux.original_length = len(times)
 
-                    times = []
-                    CH4 = []
-                    in_flux = 0
-                    start_seconds = 0 
-                    continue
+                        times = []
+                        CH4 = []
+                        in_flux = 0
+                        start_seconds = 0 
+                        continue
     f.close()
     return fluxes
 
@@ -260,6 +267,7 @@ def draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4):
     at = AnchoredText(
         r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=15), frameon=True, loc='upper center')
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+    at.patch.set_alpha(0.5)
     ax.add_artist(at)
     
     plt.plot(fluxes[i].pruned_times, fluxes[i].pruned_CH4, linewidth = 2.0)
@@ -435,8 +443,8 @@ def LICOR():
 
     layout = [[sg.Text('LICOR Data Processing Tool', font='Any 36', background_color='#DF954A')],
         [sg.Text("", background_color='#DF954A')],
-        [sg.Text('Field data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
-        [sg.Text('LICOR data file:', size=(15, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
+        [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
+        [sg.Text('LICOR data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
         [sg.Text('Gas to analyze:', size=(15, 1), background_color='#DF954A'), sg.Radio('CO2', 'RADIO2', enable_events=True, default=False, key='-CO2-', background_color='#DF954A'), sg.Radio('CH4', 'RADIO2',enable_events=True, default=True, key='-CH4-', background_color='#DF954A')],
         [sg.Text("Site name:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-SITE-')],
         [sg.Text("Date:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-DATE-')],
@@ -488,14 +496,14 @@ def LICOR():
         except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error parsing data files: Ensure your field data and LICOR data are formatted correctly")
+            raise e
         
         try:
             prune(fluxes, CO2_or_CH4)
         except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error pruning data: Verify times are correct in field data file")
+            raise e
 
         try:
             flux_calculation(fluxes, CO2_or_CH4)

@@ -2,6 +2,7 @@ from FMA import FMA
 from LICOR import LICOR
 from GC import GC
 from IRGA_EGM5 import IRGA
+from LICOR_Samples import LICOR_Samples
 import traceback
 import PySimpleGUI as sg
 
@@ -24,7 +25,10 @@ def error_screen(e):
 layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Text("\"Peatland Equipment Data Re-Organizer\"", font ='italic', background_color="#DF4A4A")],
     [sg.Text(background_color="#DF4A4A")],
-    [sg.Text("Select an option bellow:", background_color="#DF4A4A")], [sg.Button("FMA"), sg.Button("LICOR"), sg.Button("GC"), sg.Button("IRGA EGM-5")]]
+    [sg.Text("Select an option below:", background_color="#DF4A4A")], 
+    [sg.Button("FMA"), sg.Button("LICOR (flux)"), sg.Button("LICOR (samples)"), sg.Button("GC")],
+    [sg.Button("IRGA (coming soon!)"), sg.Button("LGR (flux) (coming soon!)"), sg.Button("LGR (samples) (coming soon!)")],
+    [sg.Text(background_color="#DF4A4A")]]
 
 # Create the window
 window = sg.Window("PEDRO", layout, margins=(60, 20), background_color="#DF4A4A")
@@ -36,11 +40,20 @@ while True:
     # presses the OK button
     if event == "QUIT" or event == sg.WIN_CLOSED:
         break
-    elif event == "LICOR":
+    elif event == "LICOR (flux)":
         window.Hide()
         try:
             print("===== LICOR =====")
             LICOR()
+        except Exception as e:
+            print(traceback.format_exc())
+            error_screen(e)
+        window.UnHide()
+    elif event == "LICOR (samples)":
+        window.Hide()
+        try:
+            print("===== LICOR (samples) =====")
+            LICOR_Samples()
         except Exception as e:
             print(traceback.format_exc())
             error_screen(e)
