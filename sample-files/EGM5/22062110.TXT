@@ -1,0 +1,2 @@
+Tag(M3),Date,Time,Plot_No,Rec_No,CO2,Pressure,Flow,H2O,Tsen,O2,Error,Aux_V,PAR,Tsoil,Tair,Msoil
+M3,21/06/22,09:31:33,     1,  1153,   420, 1039.3, 310, 0.0, 0.0, 0.0,  0, 0.0000,  1329, 0.0,22.7, 0.0
