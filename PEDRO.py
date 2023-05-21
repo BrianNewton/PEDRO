@@ -26,8 +26,8 @@ layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Text("\"Peatland Equipment Data Re-Organizer\"", font ='italic', background_color="#DF4A4A")],
     [sg.Text(background_color="#DF4A4A")],
     [sg.Text("Select an option below:", background_color="#DF4A4A")], 
-    [sg.Button("FMA"), sg.Button("LICOR (flux)"), sg.Button("LICOR (samples)"), sg.Button("GC")],
-    [sg.Button("IRGA (coming soon!)"), sg.Button("LGR (flux) (coming soon!)"), sg.Button("LGR (samples) (coming soon!)")],
+    [sg.Button("FMA"), sg.Button("LICOR (flux)"), sg.Button("LICOR (samples)"), sg.Button("GC"), sg.Button("IRGA EGM-5")],
+    [sg.Button("LGR (flux) (coming soon!)"), sg.Button("LGR (samples) (coming soon!)")],
     [sg.Text(background_color="#DF4A4A")]]
 
 # Create the window

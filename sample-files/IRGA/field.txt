@@ -1,0 +1,4 @@
+Flux name, chamber surface area (m^2), chamber height (m)
+FLUX1, 0.36, 0.3
+FLUX2, 0.36, 0.3
+FLUX3, 0.36, 0.3
