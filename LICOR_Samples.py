@@ -329,10 +329,14 @@ def linear_model(samples, LICOR):
         return(1, 1, 1)
 
     for i in range(numStandards):
-        Y_CH4.append(float(LICOR[random.randint(0, len(LICOR))][1]))
+        rand = random.randint(0, len(LICOR))
+        while math.isnan(LICOR[rand][1]):
+            rand = random.randint(0, len(LICOR))
+
+        Y_CH4.append(float(LICOR[rand][1]))
         X_CH4.append(0)
 
-        Y_CO2.append(float(LICOR[random.randint(0, len(LICOR))][2]))
+        Y_CO2.append(float(LICOR[rand][2]))
         X_CO2.append(0)
 
     # simple linear regression
@@ -384,6 +388,7 @@ def linear_model(samples, LICOR):
     R2_CH4 = 1 - SS_res_CH4/SS_t_CH4    # coefficient of determination
     R2_CO2 = 1 - SS_res_CO2/SS_t_CO2
 
+    print(m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2)
     return(m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2)
 
 
