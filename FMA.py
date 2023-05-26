@@ -332,10 +332,6 @@ def FMA():
         [sg.Text("", background_color='#5DBF06')],
         [sg.Submit(), sg.Cancel()]]
 
-    #layout = [[sg.Column(layout, key='-COL1-'), sg.Column(layout2, visible=False, key='-COL2-'), sg.Column(layout3, visible=False, key='-COL3-')],
-     #     [sg.Button('Cycle Layout'), sg.Button('1'), sg.Button('2'), sg.Button('3'), sg.Button('Exit')]]
-
-
     # Create the window
     window = sg.Window("FMA", layout, margins=(80, 50), background_color='#5DBF06')
     cancelled = False
@@ -359,90 +355,32 @@ def FMA():
         try:
             print("Reading input files")
             samples, FMA = input_data(sample_data, FMA_data)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error reading data files, ensure they're formatted correctly")
 
-        try:
             print("Processing data")
             process_samples(samples, FMA)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error processing samples: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Obtaining peak bounds")
             obtain_peaks(samples, FMA)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peaks: Ensure peak bounds were chosen correctly")
 
-        try:
             print("Trimming data")
             standardize(samples, FMA)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error standardizing results: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Calculating peak areas")
             peak_areas(samples)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Generating linear model")
             m, b, R2 = linear_model(samples, FMA)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Calculating concentrations")
             concentrations(samples, m, b)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Outputting data")
             out = outputData(samples, m, b, R2) 
-        except:
+
+        except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error outputting results: Ensure chosen location is valid")
+            raise e
 
     window.close()
     return 0
-
-
-if __name__ == "__main__":
-
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("================================================================================")
-    print("=========================== FMA data processing tool ===========================")
-    print("================================================================================\n")
-    
-    root = tkinter.Tk()
-    root.withdraw()
-    print("Choose sample timing file:")
-    sample_data = tkinter.filedialog.askopenfilename(title = "Choose sample timing file")
-    print("Choose FMA data file:")
-    FMA_data = tkinter.filedialog.askopenfilename(title = "Choose FMA data file")
-
-    samples, FMA = input_data(sample_data, FMA_data)
-    process_samples(samples, FMA)
-    obtain_peaks(samples, FMA)
-    standardize(samples, FMA)
-    peak_areas(samples)
-    m, b, R2 = linear_model(samples, FMA)
-    concentrations(samples, m, b)
-    out = outputData(samples, m, b, R2) 

@@ -363,9 +363,9 @@ def outputData(fluxes, site, date, CO2_or_CH4):
     worksheet.write_row(0, 0, ["Site:", site])
     worksheet.write_row(1, 0, ["Date:", date])
     if CO2_or_CH4.lower() == "co2":
-        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '',  "RSQ", "Rate of change (CO2 [ppm/min])", "m (CO2 [ppm/sec])", "Flux of CO2 (g C m^-2 d^-1", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
+        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (C)", '',  "RSQ", "Rate of change (CO2 [ppm/min])", "m (CO2 [ppm/sec])", "Flux of CO2 (g C m^-2 d^-1)", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     else:
-        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '', "RSQ", "Rate of change (CH4 [ppb/min])", "m (CH4 [ppb/sec])", "Flux of CH4 (g C m^-2 d^-1", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
+        worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (C)", '', "RSQ", "Rate of change (CH4 [ppb/min])", "m (CH4 [ppb/sec])", "Flux of CH4 (g C m^-2 d^-1)", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     for i in range(len(fluxes)):
         vol = fluxes[i].surface_area * fluxes[i].chamber_height * 1000
         worksheet.write_column(3, i + 1, [fluxes[i].name , '', vol, fluxes[i].temp, '', fluxes[i].RSQ, fluxes[i].RoC, fluxes[i].RoC/60, fluxes[i].flux, fluxes[i].data_loss])
@@ -385,10 +385,10 @@ def outputData(fluxes, site, date, CO2_or_CH4):
         worksheet.write_row(0, 0, ["Name", flux.name])
         worksheet.write_row(1, 0, ["RSQ", flux.RSQ, '', '', "Chamber volume (L)", vol])
         if CO2_or_CH4.lower() == 'co2':
-            worksheet.write_row(2, 0, ["Rate of change (CO2 [ppm/min]", flux.RoC, '', '', "Air temp (K)", flux.temp])
+            worksheet.write_row(2, 0, ["Rate of change (CO2 [ppm/min])", flux.RoC, '', '', "Air temp (C)", flux.temp])
             worksheet.write_row(3, 0, ["Flux of CO2 (g C m^-2 d^-1)", flux.flux])
         else:
-            worksheet.write_row(2, 0, ["Rate of change (CH4 [ppb/min]", flux.RoC, '', '', "Air temp (K)", flux.temp])
+            worksheet.write_row(2, 0, ["Rate of change (CH4 [ppb/min])", flux.RoC, '', '', "Air temp (C)", flux.temp])
             worksheet.write_row(3, 0, ["Flux of CH4 (g C m^-2 d^-1)", flux.flux])
         worksheet.write_row(4, 0, ["Data loss (%)", flux.data_loss])
 
@@ -441,7 +441,7 @@ def outputData(fluxes, site, date, CO2_or_CH4):
 
 def LICOR():
 
-    layout = [[sg.Text('LICOR Data Processing Tool', font='Any 36', background_color='#DF954A')],
+    layout = [[sg.Text('LICOR Flux Data Processing Tool', font='Any 36', background_color='#DF954A')],
         [sg.Text("", background_color='#DF954A')],
         [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
         [sg.Text('LICOR data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
@@ -489,76 +489,28 @@ def LICOR():
         except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error in inputted information")
+            raise e
 
         try:
+            print("Reading input files")
             fluxes = input_data(field_data, licor_data, CO2_or_CH4)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise e
-        
-        try:
+
+            print("Pruning data")
             prune(fluxes, CO2_or_CH4)
+
+            print("Calculating fluxes")
+            flux_calculation(fluxes, CO2_or_CH4)
+
+            print("Calculating offsets")
+            offsets(fluxes)
+
+            print("Outputting data")
+            out = outputData(fluxes, site, date, CO2_or_CH4)
+
         except Exception as e:
             window.close()
             print(traceback.format_exc())
             raise e
-
-        try:
-            flux_calculation(fluxes, CO2_or_CH4)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error generating linear model: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
-
-        try:  
-            offsets(fluxes)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error generating linear offsets: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
-        
-        try:
-            out = outputData(fluxes, site, date, CO2_or_CH4)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error outputting data: Ensure the chosen location is valid")
 
     window.close()
     return 0
-
-
-# Used on its own
-if __name__ == "__main__":
-
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("================================================================================")
-    print("========================== LICOR data processing tool ==========================")
-    print("================================================================================\n")
-    
-    # get field data and LICOR data files from user prompts
-    root = tkinter.Tk()
-    root.withdraw()
-    print("Choose field data file:")
-    field_data = tkinter.filedialog.askopenfilename(title = "Choose field data file")
-    print("Choose LICOR data file:")
-    licor_data = tkinter.filedialog.askopenfilename(title = "Choose LICOR data file")
-
-    # prompt user to enter whether CO2 or CH4 flux is to be analyzed
-    CO2_or_CH4 = ''
-    while CO2_or_CH4.lower() != 'co2' and CO2_or_CH4.lower() != 'ch4':
-        CO2_or_CH4 = input("Which flux to measure? (type \"CO2\" or \"CH4\"): ")
-    
-    # prompt user for site name
-    site = input("Enter the site name: ")
-
-    #prompt user for site date
-    date = input("Enter the site date: ")
-
-    fluxes = input_data(field_data, licor_data, CO2_or_CH4)
-    prune(fluxes, CO2_or_CH4)
-    flux_calculation(fluxes, CO2_or_CH4)
-    offsets(fluxes)
-    out = outputData(fluxes, site, date, CO2_or_CH4)

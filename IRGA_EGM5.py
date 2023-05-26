@@ -180,6 +180,7 @@ def draw_plot(i, fluxes, fig, ax, cid):
     m, b, R2 = linear_regression(fluxes[i].pruned_times, fluxes[i].pruned_CO2)
     at = AnchoredText(
         r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=15), frameon=True, loc='upper center')
+    at.patch.set_alpha(0.5)
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     ax.add_artist(at)
     
@@ -331,17 +332,17 @@ def output_data(fluxes, date):
 
 def IRGA():
 
-    layout = [[sg.Text('IRGA EGM-5 Data Processing Tool', font='Any 36', background_color='#E833FF')],
-        [sg.Text("", background_color='#E833FF')],
-        [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#E833FF'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
-        [sg.Text('IRGA files folder:', size=(15, 1), background_color='#E833FF'), sg.Input(key='-FOLDER-'), sg.FolderBrowse()],
-        [sg.Text("Date:", size=(15, 1), background_color='#E833FF'), sg.InputText(key='-DATE-')],
-        [sg.Text("", background_color='#E833FF')],
+    layout = [[sg.Text('IRGA EGM-5 Data Processing Tool', font='Any 36', background_color='#B9139D')],
+        [sg.Text("", background_color='#B9139D')],
+        [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#B9139D'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
+        [sg.Text('IRGA files folder:', size=(15, 1), background_color='#B9139D'), sg.Input(key='-FOLDER-'), sg.FolderBrowse()],
+        [sg.Text("Date:", size=(15, 1), background_color='#B9139D'), sg.InputText(key='-DATE-')],
+        [sg.Text("", background_color='#B9139D')],
         [sg.Submit(), sg.Cancel()]]
 
 
     # Create the window
-    window = sg.Window("IRGA EGM5", layout, margins=(80, 50), background_color='#E833FF')
+    window = sg.Window("IRGA EGM5", layout, margins=(80, 50), background_color='#B9139D')
     cancelled = False
 
     # Create an event loop
@@ -367,53 +368,26 @@ def IRGA():
             raise Exception("Error in inputted information")
 
         try:
+            print("Reading input files")
             fluxes = input_data(folder, field_file)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error parsing data files: Ensure your field data and LICOR data are formatted correctly")
-        
-        try:
+
+            print("Pruning data")
             prune(fluxes)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error pruning data: Verify times are correct in field data file")
 
-        try:
+            print("Calculating fluxes")
             flux_calculation(fluxes)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error generating linear model: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:  
+            print("Calculating offsets")
             offsets(fluxes)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error generating linear offsets: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
-        
-        try:
-            out = output_data(fluxes, date)
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error outputting data: Ensure the chosen location is valid")
 
+            print("Outputting data")
+            out = output_data(fluxes, date)
+
+        except Exception as e:
+            window.close()
+            print(traceback.format_exc())
+            raise e
+        
     window.close()
     return 0
 
-
-if __name__ == "__main__":
-
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("================================================================================")
-    print("========================== LICOR data processing tool ==========================")
-    print("================================================================================\n")
-    
-    # get field data and LICOR data files from user prompts
-    root = tkinter.Tk()
-    root.withdraw()
-    print("Choose field data file:")
-    field_data = tkinter.filedialog.askopenfilename(title = "Choose field data file")

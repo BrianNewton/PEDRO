@@ -450,12 +450,6 @@ def GC():
                 print(row)
             print(samples)
 
-        except Exception as e:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error processing PDFs: ensure MARIA.isr report format is used")
-
-        try:
             print("Outputting results")
             # output data to excel file
             out = output_data(samples, standards, longest_file_name, columns, dates, count)
@@ -463,8 +457,8 @@ def GC():
         except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error outputting results: ensure chosen location is valid")
-
+            raise e
+        
     window.close()
     return 0
 

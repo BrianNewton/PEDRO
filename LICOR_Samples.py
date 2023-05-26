@@ -209,6 +209,10 @@ def obtain_peaks(samples, LICOR):
     i = 0
     fig, ax = plt.subplots()
     fig.set_size_inches(6,6)
+
+    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())     # right draggable boundary line
+
     cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid))   # connect key press event
     plt.grid(True)
     plt.ion()
@@ -471,173 +475,32 @@ def LICOR_Samples():
         try:
             print("Reading input files")
             samples, LICOR = input_data(sample_data, LICOR_data)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error reading data files, ensure they're formatted correctly")
 
-        try:
             print("Processing data")
             process_samples(samples, LICOR)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error processing samples: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Obtaining peak bounds")
             obtain_peaks(samples, LICOR)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peaks: Ensure peak bounds were chosen correctly")
 
-        try:
             print("Trimming data")
             standardize(samples, LICOR)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error standardizing results: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Calculating peak areas")
             peak_areas(samples)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Generating linear model")
             m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2 = linear_model(samples, LICOR)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Calculating concentrations")
             concentrations(samples, m_CH4, b_CH4, m_CO2, b_CO2)
-        except:
-            window.close()
-            print(traceback.format_exc())
-            raise Exception("Error obtaining peak areas: This shouldn't happen, contact me at btnewton@uwaterloo.ca")
 
-        try:
             print("Outputting data")
             out = outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2) 
-        except:
+
+        except Exception as e:
             window.close()
             print(traceback.format_exc())
-            raise Exception("Error outputting results: Ensure chosen location is valid")
+            raise e
 
     window.close()
     return 0
-
-
-if __name__ == "__main__":
-
-    os.system('cls' if os.name == 'nt' else 'clear')
-    print("================================================================================")
-    print("======================= LICOR SAMPLE data processing tool ======================")
-    #print("================================================================================")
-    #print("======= For any questions or concerns please email btnewton@uwaterloo.ca =======")
-    print("================================================================================\n")
-    
-    root = tkinter.Tk()
-    root.withdraw()
-    print("Choose sample timing file:")
-    sample_data = tkinter.filedialog.askopenfilename(title = "Choose sample timing file")
-    print("Choose LICOR data file:")
-    FMA_data = tkinter.filedialog.askopenfilename(title = "Choose LICOR data file")
-
-
-    # Parse sample and FMA data from passed text files
-    try:
-        print("Start data parsing")
-        samples, FMA = input_data(sample_data, FMA_data)
-    except:
-        print("Error parsing data, please ensure your data files are named correctly")
-        sys.exit(1)
-    else:
-        print("Data parsing complete")
-
-
-    # Add end times to each sample, for the sake of plotting
-    try:
-        print("Start sample processing")
-        process_samples(samples, FMA)
-    except:
-        print("Error processing data, please ensure data files are formatted correctly")
-        sys.exit(1)
-    else:
-        print("Sample processing complete")
-
-
-    # Plot each sample time range, have user set peak bounds
-    try:
-        print("Obtain peak bounds")
-        obtain_peaks(samples, FMA)
-    except:
-        print("Error obtaining peak bounds")
-        sys.exit(1)
-    else:
-        print("Peak bounds determination complete")
-
-
-    # Trim extraneous data outside of user set bounds
-    try:
-        print("Trimming sample data")
-        standardize(samples, FMA)
-    except:
-        print("Error trimming sample data")
-        sys.exit(1)
-    else:
-        print("Data trimming complete")
-
-
-    # Determine peak areas
-    try:
-        print("Determining peak areas")
-        peak_areas(samples)
-    except:
-        print("Error determining peak areas")
-        sys.exit(1)
-    else:  
-        print("Peak area determination complete")
-
-
-    # Generate linear model of the form, CH4 ppm = m * area + b
-    try:
-        print("Generating linear model")
-        m, b, R2 = linear_model(samples, FMA)
-    except:
-        print("Error generating linear model")
-        sys.exit(1)
-    else:
-        print("Linear model generation complete")
-
-    # Calculate CH4 concentration of each sample
-    try:
-        print("Calculating CH4 concentrations")
-        concentrations(samples, m, b)
-    except:
-        print("Error calculating CH4 concentrations")
-        sys.exit(1)
-    else:
-        print("CH4 calculation complete")
-
-
-    out = outputData(samples, m, b, R2)
-    # Output data in csv file
-    #try:
-    #    print("Outputting results")
-    #    out = outputData(samples, m, b, R2, folder)
-    #except:
-    #    print("Error creating output file")
-    #    sys.exit(1)
-    #else:
-    #    print("Outputting results complete")
-
-    print("FMA data analysis complete! The results have been outputted to: " + out)

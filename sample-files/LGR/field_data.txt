@@ -1,0 +1,6 @@
+Collar,Start Time,End Time,Light or Dark,Chamber height (m),Surface area (m^2)
+Hollow 1,13:44:00,13:47:00,L,0.45,3.14159
+Hollow 1,13:50:20,13:53:20,D,0.45,3.14159
+Hollow 2,13:55:30,13:58:30,D,0.45,3.14159
+Hollow 2,13:59:20,14:02:20,Light,0.45,3.14159
+Hummock 1,14:05:20,14:08:20,light,0.45,3.14159
