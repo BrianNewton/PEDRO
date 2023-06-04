@@ -52,37 +52,42 @@ def input_data(sample_data, FMA_data):
     time_regex = r"(\d*):(\d*):(\d*)"
 
     
+    try:
+        f = open(FMA_data, "r")
 
-    f = open(FMA_data, "r")
+        # in case user enters samples times in time format instead of seconds, record start time in seconds
+        first_line = next(f)
+        FMA_time_match = re.search(time_regex, first_line)
+        time_start = float(FMA_time_match[1])*3600 + float(FMA_time_match[2])*60 + float(FMA_time_match[3])
+        next(f)
 
-    # in case user enters samples times in time format instead of seconds, record start time in seconds
-    first_line = next(f)
-    FMA_time_match = re.search(time_regex, first_line)
-    time_start = float(FMA_time_match[1])*3600 + float(FMA_time_match[2])*60 + float(FMA_time_match[3])
-    next(f)
+        for line in f:
+            if line == 'Settings for ICOS V4.19.051.CH4.L.051 Data Acquisition.\n':
+                break
+            x = line.split(",")
+            for i in range(len(x)):
+                x[i] = x[i].strip(' \t\n\r')
+            FMA.append(x)
+        f.close()
+    except:
+        raise Exception("Error processing FMA data file, please ensure you're using the original, unedited file")
 
-    for line in f:
-        if line == 'Settings for ICOS V4.19.051.CH4.L.051 Data Acquisition.\n':
-            break
-        x = line.split(",")
-        for i in range(len(x)):
-            x[i] = x[i].strip(' \t\n\r')
-        FMA.append(x)
-    f.close()
-
-    # process sample text file, parsing each sample name and start time
-    f = open(sample_data, "r")      
-    for line in f:
-        x = line.split(",")
-        for i in range(len(x)):
-            x[i] = x[i].strip(' \t\n\r')
-        
-        #if user uses time format instead of seconds, convert to seconds using FMA start time
-        time_regex_match = re.search(time_regex, x[1])
-        if time_regex_match:
-            x[1] = float(time_regex_match[1])*3600 + float(time_regex_match[2])*60 + float(time_regex_match[3]) - time_start
-        samples.append(sample(x[0], x[1]))
-    f.close()
+    try:
+        # process sample text file, parsing each sample name and start time
+        f = open(sample_data, "r")      
+        for line in f:
+            x = line.split(",")
+            for i in range(len(x)):
+                x[i] = x[i].strip(' \t\n\r')
+            
+            #if user uses time format instead of seconds, convert to seconds using FMA start time
+            time_regex_match = re.search(time_regex, x[1])
+            if time_regex_match:
+                x[1] = float(time_regex_match[1])*3600 + float(time_regex_match[2])*60 + float(time_regex_match[3]) - time_start
+            samples.append(sample(x[0], x[1]))
+        f.close()
+    except:
+        raise Exception("Error processing sample file, please ensure all samples are listed in chronological order with no time overlap")
 
     # process FMA data text file, parsing all data outputted from FMA
     

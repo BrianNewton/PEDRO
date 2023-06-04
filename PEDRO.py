@@ -31,7 +31,7 @@ layout = [[sg.Text("P.E.D.R.O.", font='Any 48', background_color="#DF4A4A")],
     [sg.Button("FMA"), sg.Button("LICOR (flux)"), sg.Button("LICOR (samples)"), sg.Button("GC")],
     [sg.Button("LGR (flux)"), sg.Button("LGR (samples)"), sg.Button("IRGA EGM-5")],
     [sg.Text(background_color="#DF4A4A")],
-    [sg.Text("v1.0.0", background_color="#DF4A4A")]]
+    [sg.Text("v1.0.1", background_color="#DF4A4A")]]
 
 # Create the window
 window = sg.Window("PEDRO", layout, margins=(60, 20), background_color="#DF4A4A")

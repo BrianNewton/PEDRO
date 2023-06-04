@@ -88,39 +88,45 @@ def input_data(sample_data, LICOR_data):
     LICOR_CH4_regex = r"CH4"
     LICOR_CO2_regex = r"CO2"
 
-    f = open(LICOR_data, "r")
-    x = next(f).replace('\t', ',').replace(';',',').split(",")
-    while x[0] != "DATAH":
+    try:
+        f = open(LICOR_data, "r")
         x = next(f).replace('\t', ',').replace(';',',').split(",")
-    print(x)
-    for i in range(len(x)):
-        if re.search(LICOR_time_regex, x[i], re.IGNORECASE):
-            LICOR_time_index = i
-        if re.search(LICOR_CH4_regex, x[i], re.IGNORECASE):
-            LICOR_CH4_index = i
-        if re.search(LICOR_CO2_regex, x[i], re.IGNORECASE):
-            LICOR_CO2_index = i
-
-    for line in f:
-        x = line.replace('\t', ',').replace(';', ',').split(',')
-        for k in range(len(x)):
-            x[k] = x[k].strip(' \t\n\r')
-        if x[0] == "DATA":
-            time_match = re.search(time_regex, x[LICOR_time_index])
-            time = float(time_match[1])*3600 + float(time_match[2])*60 + float(time_match[3])
-            LICOR.append([time, float(x[LICOR_CH4_index])/1000, x[LICOR_CO2_index]])
-
-    f = open(sample_data, "r") 
-    for line in f:
-        x = line.split(",")
+        while x[0] != "DATAH":
+            x = next(f).replace('\t', ',').replace(';',',').split(",")
+        print(x)
         for i in range(len(x)):
-            x[i] = x[i].strip(' \t\n\r')
+            if re.search(LICOR_time_regex, x[i], re.IGNORECASE):
+                LICOR_time_index = i
+            if re.search(LICOR_CH4_regex, x[i], re.IGNORECASE):
+                LICOR_CH4_index = i
+            if re.search(LICOR_CO2_regex, x[i], re.IGNORECASE):
+                LICOR_CO2_index = i
 
-        sample_time_match =re.search(time_regex, x[1])
-        sample_time = float(sample_time_match[1])*3600 + float(sample_time_match[2])*60 + float(sample_time_match[3])
+        for line in f:
+            x = line.replace('\t', ',').replace(';', ',').split(',')
+            for k in range(len(x)):
+                x[k] = x[k].strip(' \t\n\r')
+            if x[0] == "DATA":
+                time_match = re.search(time_regex, x[LICOR_time_index])
+                time = float(time_match[1])*3600 + float(time_match[2])*60 + float(time_match[3])
+                LICOR.append([time, float(x[LICOR_CH4_index])/1000, x[LICOR_CO2_index]])
+    except:
+        raise Exception("Error processing LICOR data file, please ensure you're using the original unedited file")
 
-        samples.append(sample(x[0], sample_time))
-    f.close()
+    try:
+        f = open(sample_data, "r") 
+        for line in f:
+            x = line.split(",")
+            for i in range(len(x)):
+                x[i] = x[i].strip(' \t\n\r')
+
+            sample_time_match =re.search(time_regex, x[1])
+            sample_time = float(sample_time_match[1])*3600 + float(sample_time_match[2])*60 + float(sample_time_match[3])
+
+            samples.append(sample(x[0], sample_time))
+        f.close()
+    except:
+        raise Exception("Error processing sample file, please ensure all samples are listed in chronological order with no time overlap")
 
     return samples, LICOR
 
@@ -138,8 +144,12 @@ def process_samples(samples, LICOR):
             else:
                 samples[i].peak_end_time = samples[i + 1].peak_start_time
         else:
-            samples[i].peak_end_time = samples[i].peak_start_time + 180
-
+            last_LICOR_time = LICOR[-1][0]
+            if last_LICOR_time < samples[i].peak_start_time + 180:
+                samples[i].peak_end_time = last_LICOR_time
+            else:
+                samples[i].peak_end_time = samples[i].peak_start_time + 180
+        
 
 # process button press for plot
 def on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid):
@@ -174,9 +184,9 @@ def draw_plot(i, samples, LICOR, fig, ax, cid):
         LICOR_end = 0
 
         for j in range(len(LICOR)):
-            if float(samples[i].peak_start_time) - float(LICOR[j][0]) < 0 and LICOR_start == 0:
+            if float(samples[i].peak_start_time) - float(LICOR[j][0]) <= 0 and LICOR_start == 0:
                 LICOR_start = j
-            if float(samples[i].peak_end_time) - float(LICOR[j][0]) < 0 and LICOR_end == 0:
+            if float(samples[i].peak_end_time) - float(LICOR[j][0]) <= 0 and LICOR_end == 0:
                 LICOR_end = j
         for k in range(math.floor(LICOR_start), math.ceil(LICOR_end)):
             samples[i].times.append(float(LICOR[k][0]))
@@ -326,7 +336,7 @@ def linear_model(samples, LICOR):
     numStandards = len(X_CH4)
 
     if numStandards == 0:
-        return(1, 1, 1)
+        raise Exception("No standards detected, unable to generate linear model")
 
     for i in range(numStandards):
         rand = random.randint(0, len(LICOR))
