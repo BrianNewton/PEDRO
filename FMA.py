@@ -258,7 +258,7 @@ def linear_model(samples, FMA):
     numStandards = len(X)
 
     if numStandards == 0:
-        return(1, 1, 1)
+        return(1, 2.1, 0)
 
     for i in range(numStandards):
         Y.append(float(FMA[random.randint(0, len(FMA))][1]))

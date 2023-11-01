@@ -44,6 +44,10 @@ class Flux:
         self.pruned_CH4 = []        # pruned LGR concentrations
         self.CH4_offsets = []       # offsets for each LGR concentration index
 
+        self.H2O = []
+        self.pruned_H2O = []
+        self.H2O_offsets = []
+
         self.temp = 0               # Average temperature from LGR
 
         self.cuts = []      # every user data cut
@@ -71,6 +75,7 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
     LGR_CH4_regex = r"\[CH4\]_ppm$"
     LGR_CO2_regex = r"\[CO2\]_ppm$"
     LGR_temp_regex = r"AmbT_C$"
+    LGR_H2O_regex = r"\[H2O\]_ppm$"
 
     time_regex_field = r"(\d*):(\d*):(\d*)"
     time_regex_LGR = r"(\d*):(\d*):(\d*).(\d*)"
@@ -85,6 +90,7 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
     LGR_time_index = 0
     LGR_CH4_index = 1
     LGR_CO2_index = 9
+    LGR_H2O_index = 7
     LGR_temp_index = 19
 
     # for each flux, obtain from field data file the name, start and end times
@@ -132,10 +138,13 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
             LGR_CO2_index = i
         if re.search(LGR_temp_regex, x[i], re.IGNORECASE):
             LGR_temp_index = i
+        if re.search(LGR_H2O_regex, x[i], re.IGNORECASE):
+            LGR_H2O_regex = i
 
     in_flux = 0
     times = []
     CH4 = []
+    H2O = []
     temps = []
     if CO2_or_CH4.lower() == 'co2':
         index = LGR_CO2_index
@@ -165,6 +174,7 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
                             CH4.append(float(x[index])) #CO2
                         else:
                             CH4.append(float(x[index])*1000) # CH4, LGR reports in ppm, want ppb
+                        H2O.append(float(x[LGR_H2O_index]))
                         temps.append(float(x[LGR_temp_index]))
                 elif in_flux == 1: # if current line in LGR data is in a flux, append the time and gas concentration to flux
                     times.append(float(time_match[1])*3600 + float(time_match[2])*60 + float(time_match[3]) - start_seconds)
@@ -172,18 +182,22 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
                         CH4.append(float(x[index])) #CO2
                     else:
                         CH4.append(float(x[index])*1000) # CH4, LGR reports in ppm, want ppb
+                    H2O.append(float(x[LGR_H2O_index]))
                     temps.append(float(x[LGR_temp_index]))
                     if time_seconds == flux.end_time: # if current line in LGR data is the end time of the current flux, finalize times and concentrations sets and stop
                         
                         flux.times = times
                         flux.CH4 = CH4
+                        flux.H2O = H2O
                         flux.pruned_times = times
                         flux.pruned_CH4 = CH4
+                        flux.pruned_H2O = H2O
                         flux.original_length = len(times)
                         flux.temp = sum(temps)/len(temps)
 
                         times = []
                         CH4 = []
+                        H2O = []
                         temps = []
                         in_flux = 0
                         start_seconds = 0
@@ -195,7 +209,7 @@ def input_data(field_data, LGR_data, CO2_or_CH4):
 
 
 # process button press for plot
-def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4):
+def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid, CO2_or_CH4):
     sys.stdout.flush()
 
     # if enter key pressed, cut data according to currently set cut bounds
@@ -226,29 +240,34 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4):
 
             times = []
             CH4 = []
+            H2O = []
 
             # if entry is not in the cut, add it to a new set
             for k in range(len(fluxes[i].pruned_times)):
                 if fluxes[i].pruned_times[k] < time_L:
                     times.append(fluxes[i].pruned_times[k])
                     CH4.append(fluxes[i].pruned_CH4[k])
+                    H2O.append(fluxes[i].pruned_H2O[k])
                 if fluxes[i].pruned_times[k] > time_R:
                     times.append(fluxes[i].pruned_times[k] - time_delta)
                     CH4.append(fluxes[i].pruned_CH4[k] + CH4_delta)
+                    H2O.append(fluxes[i].pruned_H2O[k])
             
             # update flux pruned sets with cut sets
             fluxes[i].pruned_times = times
             fluxes[i].pruned_CH4 = CH4
+            fluxes[i].pruned_H2O = H2O
 
             # refresh the plot
-            draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
+            draw_plot(i, fluxes, fig, ax1, ax2, cid, CO2_or_CH4)
 
     # if r key pressed, reset data
     if event.key == 'r':
         fluxes[i].pruned_times = fluxes[i].times
         fluxes[i].pruned_CH4 = fluxes[i].CH4
+        fluxes[i].pruned_H2O = fluxes[i].H2O
         fluxes[i].cuts = []
-        draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
+        draw_plot(i, fluxes, fig, ax1, ax2, cid, CO2_or_CH4)
     
     # right arrow key moves to the next flux, or exits if currently on the last flux
     if event.key == 'right':
@@ -257,59 +276,61 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4):
             plt.close('all')
             return 0
         else:
-            draw_plot(i + 1, fluxes, fig, ax, cid, CO2_or_CH4)
+            draw_plot(i + 1, fluxes, fig, ax1, ax2, cid, CO2_or_CH4)
         
     # left arrow key moves to the previous flux, or does nothing if at the beginning
     if event.key == 'left':
         if i != 0:
-            draw_plot(i - 1, fluxes, fig, ax, cid, CO2_or_CH4)
+            draw_plot(i - 1, fluxes, fig, ax1, ax2, cid, CO2_or_CH4)
 
 
 #draw plot for i-th flux
-def draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4):
+def draw_plot(i, fluxes, fig, ax1, ax2, cid, CO2_or_CH4):
 
-    fig.clear()
-    ax = fig.add_subplot()
-
-
+    ax1.clear()
     m, b, R2 = linear_regression(fluxes[i].pruned_times, fluxes[i].pruned_CH4)
     at = AnchoredText(
         r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=15), frameon=True, loc='upper center')
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     at.patch.set_alpha(0.5)
-    ax.add_artist(at)
-    
-    plt.plot(fluxes[i].pruned_times, fluxes[i].pruned_CH4, linewidth = 2.0)
-    line_L = draggable_lines(ax, fluxes[i].pruned_times[0], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, fluxes[i].pruned_times[-1], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], plt.gca().get_ylim())     # right draggable boundary line
+    ax1.add_artist(at)
+    ax1.plot(fluxes[i].pruned_times, fluxes[i].pruned_CH4, linewidth = 2.0)
+    ax1.grid(True)
+    line_L = draggable_lines(ax1, fluxes[i].pruned_times[0], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], ax1.get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax1, fluxes[i].pruned_times[-1], [fluxes[i].pruned_times[0], fluxes[i].pruned_times[-1]], ax1.get_ylim())     # right draggable boundary line
 
     # if currently on the last flux, change header information, otherwise set title to user controls
     if i == len(fluxes) - 1:
-        ax.set(title = fluxes[i].name +  "\nLast flux! Press right arrow to finish, enter to cut data, r to reset cuts\nUse the mouse to drag peak bounds")
+        ax1.set(title = fluxes[i].name +  "\nLast flux! Press right arrow to finish, enter to cut data, r to reset cuts\nUse the mouse to drag peak bounds")
     else:      
-        ax.set(title = fluxes[i].name + '\nUse arrow keys to navigate fluxes, enter to cut data, r to reset cuts\nUse the mouse to drag cut bounds')
-
-    ax.set(xlabel = "Time (s)")                 # x axis label
+        ax1.set(title = fluxes[i].name + '\nUse arrow keys to navigate fluxes, enter to cut data, r to reset cuts\nUse the mouse to drag cut bounds')
 
     if CO2_or_CH4 == 'co2':
-        ax.set(ylabel = "CO2 concentration (ppm)")  # y axis label
+        ax1.set(ylabel = "CO2 concentration (ppm)")  # y axis label
     else:
-        ax.set(ylabel = "CH4 concentration (ppb)")
+        ax1.set(ylabel = "CH4 concentration (ppb)")
+    
+    ax2.clear()
+    ax2.plot(fluxes[i].pruned_times, fluxes[i].pruned_H2O, linewidth = 2.0)
+    ax2.grid(True)
+
+    ax2.set(xlabel = "Time (s)")
+    ax2.set(ylabel = "H2O (ppm)")
+
     fig.canvas.mpl_disconnect(cid)
-    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax, cid, CO2_or_CH4))   # connect key press event  
-    ax.grid(True)
+    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid, CO2_or_CH4))   # connect key press event  
     fig.canvas.draw()
 
 
 # entry point for drawing the plots for the user to cut data
 def prune(fluxes, CO2_or_CH4):
     i = 0
-    fig, ax = plt.subplots()
+    fig, (ax1, ax2) = plt.subplots(2, 1)
     fig.set_size_inches(9,6)
     cid = ''
     plt.grid(True)
     plt.ion()
-    draw_plot(i, fluxes, fig, ax, cid, CO2_or_CH4)
+    draw_plot(i, fluxes, fig, ax1, ax2, cid, CO2_or_CH4)
     plt.show(block=False)
     while plt.get_fignums():
         fig.canvas.draw_idle()
@@ -350,6 +371,7 @@ def offsets(fluxes):
             for i in range(cut[0] + cut_size, cut[1] + 1 + cut_size):
                 flux.pruned_times.insert(i, '')
                 flux.pruned_CH4.insert(i, '')
+                flux.pruned_H2O.insert(i, '')
             cut_size += cut[1] + cut[0] + 1
 
         # calculate the offset at each index
@@ -423,21 +445,35 @@ def outputData(fluxes, site, date, CO2_or_CH4):
             worksheet.write(6, 6, "CH4 concentration offsets (ppb)")
             worksheet.set_column(6, 6, len("CH4 concentration offsets (ppb)"))
 
+        worksheet.write(6, 8, "Original H2O (ppm)")
+        worksheet.set_column(8, 8, len("Original H2O (ppm)"))
+        worksheet.write(6, 9, "Pruned H2O (ppm)")
+        worksheet.set_column(9, 9, len("Pruned H2O (ppm)"))
+
         for i in range(len(flux.times)):
-            worksheet.write_row(i + 7, 0, [flux.times[i], flux.pruned_times[i], flux.time_offsets[i], '', flux.CH4[i], flux.pruned_CH4[i], flux.CH4_offsets[i]])
+            worksheet.write_row(i + 7, 0, [flux.times[i], flux.pruned_times[i], flux.time_offsets[i], '', flux.CH4[i], flux.pruned_CH4[i], flux.CH4_offsets[i], '', flux.H2O[i], flux.pruned_H2O[i]])
 
         # generate chart showing cut values compared to kept values with offsets
-        chart = workbook.add_chart({'type': 'line'})
-        chart.add_series({'values' : '=\'%s\'!E8:E%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A8:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Cut values', 'line': {'color': 'red'}})
-        chart.add_series({'values' : '=\'%s\'!F8:F%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A9:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Kept values', 'line': {'color': 'green'}})
+        chart1 = workbook.add_chart({'type': 'line'})
+        chart1.add_series({'values' : '=\'%s\'!E8:E%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A8:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Cut values', 'line': {'color': 'red'}})
+        chart1.add_series({'values' : '=\'%s\'!F8:F%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A9:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Kept values', 'line': {'color': 'green'}})
         if CO2_or_CH4.lower() == "co2":
-            chart.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentration (ppm)'})
+            chart1.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CO2 concentration (ppm)'})
         else:
-            chart.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentration (ppb)'})
-        chart.set_x_axis({'name': 'Time (s)'})
-        chart.set_title({'name' : 'Concentration vs. Time'})
-        chart.set_size({'width': 800, 'height': 600})
-        worksheet.insert_chart('I8', chart)
+            chart1.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'CH4 concentration (ppb)'})
+        chart1.set_x_axis({'name': 'Time (s)'})
+        chart1.set_title({'name' : 'Concentration vs. Time'})
+        chart1.set_size({'width': 800, 'height': 600})
+        worksheet.insert_chart('L8', chart1)
+
+        chart2 = workbook.add_chart({'type': 'line'})
+        chart2.add_series({'values' : '=\'%s\'!I8:I%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A8:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Cut values', 'line': {'color': 'red'}})
+        chart2.add_series({'values' : '=\'%s\'!J8:J%i'%(flux.name, len(flux.times) + 9), 'categories' : '=\'%s\'!A9:A%i'%(flux.name, len(flux.CH4) + 9), 'name': 'Kept values', 'line': {'color': 'green'}})
+        chart2.set_y_axis({'interval_unit': 10, 'interval_tick': 2, 'name': 'H2O (ppm)'})
+        chart2.set_x_axis({'name': 'Time (s)'})
+        chart2.set_title({'name': 'Humidity vs. Time'})
+        chart2.set_size({'width': 800, 'height': 600})
+        worksheet.insert_chart('L40', chart2)
     
     workbook.close()    
     return out
