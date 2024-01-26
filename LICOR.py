@@ -345,7 +345,7 @@ def flux_calculation(fluxes, CO2_or_CH4):
         if CO2_or_CH4.lower() == "co2":
             flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)*(12/44)/1000)
         else:
-            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000)
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000000)
 
 
 # calculates cut offsets for the sake of reporting
