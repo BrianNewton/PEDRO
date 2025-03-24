@@ -28,6 +28,12 @@ LICOR_GAS = ''
 gas_units = {
     'ch4': 'ppb',
     'co2': 'ppm',
+    'n2o': 'ppb',
+}
+output_units = {
+    'ch4': '(mg C m^-2 d^-1)',
+    'co2': '(g C m^-2 d^-1)',
+    'n2o': '(mg N2O m^-2 d^-1)'
 }
 
 # Flux object
@@ -90,6 +96,7 @@ def input_data(field_data, licor_data):
     LICOR_time_regex = r"^TIME"
     LICOR_CH4_regex = r"CH4"
     LICOR_CO2_regex = r"CO2"
+    LICOR_N2O_regex = r"N2O"
     LICOR_H2O_regex = r"H2O"
 
     time_regex = r"(\d*):(\d*):(\d*)"
@@ -107,6 +114,7 @@ def input_data(field_data, licor_data):
     LICOR_CH4_index = 10
     LICOR_CO2_index = 9
     LICOR_H2O_index = 8
+    LICOR_N2O_index = 10
 
     # for each flux, obtain from field data file the name, start and end times
     f = open(field_data, "r")
@@ -155,19 +163,23 @@ def input_data(field_data, licor_data):
             LICOR_CH4_index = i
         if re.search(LICOR_CO2_regex, x[i], re.IGNORECASE):
             LICOR_CO2_index = i
+        if re.search(LICOR_N2O_regex, x[i], re.IGNORECASE):
+            LICOR_N2O_index = i
         if re.search(LICOR_H2O_regex, x[i], re.IGNORECASE):
             LICOR_H2O_index = i
     if LICOR_GAS == 'co2':
         index = LICOR_CO2_index
-    else:
+    elif LICOR_GAS == 'ch4':
         index = LICOR_CH4_index
+    else:
+        index = LICOR_N2O_index
 
     in_flux = 0
     times = []
     samples = []
     H2O = []
 
-    # go line by line in LICOR data, adding relevant times and concentrations to approrpiate fluxes
+    # go line by line in LICOR data, adding relevant times and concentrations to appropriate fluxes
     for flux in fluxes:
         f.seek(6)
         print(flux.name)
@@ -349,8 +361,10 @@ def flux_calculation(fluxes):
         flux.RoC = m * 60
         if LICOR_GAS == "co2":
             flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)*(12/44)/1000)
-        else:
+        elif LICOR_GAS == 'ch4':
             flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000000)
+        else:  # LICOR_GAS == 'n2o'
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)/1000000)
 
 
 # calculates cut offsets for the sake of reporting
@@ -390,7 +404,7 @@ def outputData(fluxes, site, date):
     worksheet = workbook.add_worksheet("Summary")
     worksheet.write_row(0, 0, ["Site:", site])
     worksheet.write_row(1, 0, ["Date:", date])
-    worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (C)", '', "RSQ", f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", f"m ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/sec])", f"Flux of {LICOR_GAS.upper()} (g C m^-2 d^-1)", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
+    worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (C)", '', "RSQ", f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", f"m ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/sec])", f"Flux of {LICOR_GAS.upper()} {output_units[LICOR_GAS]}", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     for i in range(len(fluxes)):
         vol = fluxes[i].surface_area * fluxes[i].chamber_height * 1000
         worksheet.write_column(3, i + 1, [fluxes[i].name , '', vol, fluxes[i].temp, '', fluxes[i].RSQ, fluxes[i].RoC, fluxes[i].RoC/60, fluxes[i].flux, fluxes[i].data_loss])
@@ -410,7 +424,7 @@ def outputData(fluxes, site, date):
         worksheet.write_row(0, 0, ["Name", flux.name])
         worksheet.write_row(1, 0, ["RSQ", flux.RSQ, '', '', "Chamber volume (L)", vol])
         worksheet.write_row(2, 0, [f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", flux.RoC, '', '', "Air temp (C)", flux.temp])
-        worksheet.write_row(3, 0, [f"Flux of {LICOR_GAS.upper()} (g C m^-2 d^-1)", flux.flux])
+        worksheet.write_row(3, 0, [f"Flux of {LICOR_GAS.upper()} {output_units[LICOR_GAS]}", flux.flux])
         worksheet.write_row(4, 0, ["Data loss (%)", flux.data_loss])
 
         worksheet.write(6, 0, "Original times (s)")
@@ -469,7 +483,12 @@ def LICOR():
         [sg.Text("", background_color='#DF954A')],
         [sg.Text('Field data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-FIELD-'), sg.FileBrowse()],
         [sg.Text('LICOR data file: (.csv, .txt)', size=(21, 1), background_color='#DF954A'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
-        [sg.Text('Gas to analyze:', size=(15, 1), background_color='#DF954A'), sg.Radio('CO2', 'RADIO2', enable_events=True, default=False, key='-CO2-', background_color='#DF954A'), sg.Radio('CH4', 'RADIO2',enable_events=True, default=True, key='-CH4-', background_color='#DF954A')],
+        [
+            sg.Text('Gas to analyze:', size=(15, 1), background_color='#DF954A'),
+            sg.Radio('CO2', 'RADIO2', enable_events=True, default=False, key='-CO2-', background_color='#DF954A'),
+            sg.Radio('CH4', 'RADIO2', enable_events=True, default=True, key='-CH4-', background_color='#DF954A'),
+            sg.Radio('N2O', 'RADIO2', enable_events=True, default=False, key='-N2O-', background_color='#DF954A'),
+        ],
         [sg.Text("Site name:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-SITE-')],
         [sg.Text("Date:", size=(15, 1), background_color='#DF954A'), sg.InputText(key='-DATE-')],
         [sg.Text("", background_color='#DF954A')],
@@ -504,8 +523,10 @@ def LICOR():
         global LICOR_GAS
         if values['-CO2-']:
             LICOR_GAS = 'co2'
-        else:  # values['-CH4-'] is True
+        elif values['-CH4-']:
             LICOR_GAS = 'ch4'
+        else:  # values['-CH4-'] is True
+            LICOR_GAS = 'n2o'
 
         try:
             field_data = values['-FIELD-']
