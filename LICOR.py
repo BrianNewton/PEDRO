@@ -72,6 +72,11 @@ class Flux:
         self.pruned_H2O = []
         self.H2O_offsets = []
 
+        # Lists for holding raw methane measurements. Will only be populated when LICOR_GAS == co2
+        self.methane = []
+        self.pruned_methane = []
+        self.methane_offsets = []
+
         self.cuts = []      # every user data cut
             
         self.RSQ = 0        # R^2 for final rate calculation
@@ -169,6 +174,7 @@ def input_data(field_data, licor_data):
             LICOR_H2O_index = i
     if LICOR_GAS == 'co2':
         index = LICOR_CO2_index
+        methane_index = LICOR_CH4_index
     elif LICOR_GAS == 'ch4':
         index = LICOR_CH4_index
     else:
@@ -178,6 +184,7 @@ def input_data(field_data, licor_data):
     times = []
     samples = []
     H2O = []
+    methane = []  # for raw methane measurements, only populated when LICOR_GAS == co2
 
     # go line by line in LICOR data, adding relevant times and concentrations to appropriate fluxes
     for flux in fluxes:
@@ -197,22 +204,30 @@ def input_data(field_data, licor_data):
                         times.append(float(x[1]) - start_seconds)
                         samples.append(float(x[index]))
                         H2O.append(float(x[LICOR_H2O_index]))
+                        if LICOR_GAS == 'co2':
+                            methane.append(float(x[LICOR_CH4_index]))
+
                 elif in_flux == 1:  # if current line in LICOR data is in a flux, append the time and gas concentration to flux
                     times.append(float(x[1]) - start_seconds)
                     samples.append(float(x[index]))
                     H2O.append(float(x[LICOR_H2O_index]))
+                    if LICOR_GAS == 'co2':
+                            methane.append(float(x[LICOR_CH4_index]))
                     if x[LICOR_time_index] == flux.end_time:  # if current line in LICOR data is the end time of the current flux, finalize times and concentrations sets and stop
                         flux.times = times
                         flux.samples = samples
                         flux.H2O = H2O
+                        flux.methane = methane
                         flux.pruned_times = times
                         flux.pruned_samples = samples
                         flux.pruned_H2O = H2O
+                        flux.pruned_methane = methane
                         flux.original_length = len(times)
 
                         times = []
                         samples = []
                         H2O = []
+                        methane = []
                         in_flux = 0
                         start_seconds = 0 
                         continue
@@ -221,7 +236,7 @@ def input_data(field_data, licor_data):
 
 
 # process button press for plot
-def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid):
+def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid):
     sys.stdout.flush()
 
     # if enter key pressed, cut data according to currently set cut bounds
@@ -253,6 +268,7 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid):
             times = []
             samples = []
             H2O = []
+            methane = []  # for raw methane measurements, only populated when LICOR_GAS == co2
 
             # if entry is not in the cut, add it to a new set
             for k in range(len(fluxes[i].pruned_times)):
@@ -260,26 +276,32 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid):
                     times.append(fluxes[i].pruned_times[k])
                     samples.append(fluxes[i].pruned_samples[k])
                     H2O.append(fluxes[i].pruned_H2O[k])
+                    if LICOR_GAS == 'co2':
+                        methane.append(fluxes[i].pruned_methane[k])
                 if fluxes[i].pruned_times[k] > time_R:
                     times.append(fluxes[i].pruned_times[k] - time_delta)
                     samples.append(fluxes[i].pruned_samples[k] + samples_delta)
                     H2O.append(fluxes[i].pruned_H2O[k])
+                    if LICOR_GAS == 'co2':
+                        methane.append(fluxes[i].pruned_methane[k])
             
             # update flux pruned sets with cut sets
             fluxes[i].pruned_times = times
             fluxes[i].pruned_samples = samples
             fluxes[i].pruned_H2O = H2O
+            fluxes[i].pruned_methane = methane
 
             # refresh the plot
-            draw_plot(i, fluxes, fig, ax1, ax2, cid)
+            draw_plot(i, fluxes, fig, ax1, ax2, ax3, cid)
 
     # if r key pressed, reset data
     if event.key == 'r':
         fluxes[i].pruned_times = fluxes[i].times
         fluxes[i].pruned_samples = fluxes[i].samples
         fluxes[i].pruned_H2O = fluxes[i].H2O
+        fluxes[i].pruned_methane = fluxes[i].methane
         fluxes[i].cuts = []
-        draw_plot(i, fluxes, fig, ax1, ax2, cid)
+        draw_plot(i, fluxes, fig, ax1, ax2, ax3, cid)
     
     # right arrow key moves to the next flux, or exits if currently on the last flux
     if event.key == 'right':
@@ -288,21 +310,25 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid):
             plt.close('all')
             return 0
         else:
-            draw_plot(i + 1, fluxes, fig, ax1, ax2, cid)
+            draw_plot(i + 1, fluxes, fig, ax1, ax2, ax3, cid)
         
     # left arrow key moves to the previous flux, or does nothing if at the beginning
     if event.key == 'left':
         if i != 0:
-            draw_plot(i - 1, fluxes, fig, ax1, ax2, cid)
+            draw_plot(i - 1, fluxes, fig, ax1, ax2, ax3, cid)
 
 
 #draw plot for i-th flux
-def draw_plot(i, fluxes, fig, ax1, ax2, cid):
+def draw_plot(i, fluxes, fig, ax1, ax2, ax3, cid):
+    """
+    Function to add data from fluxes to the axes and draw figure.
+    If LICOR_GAS != co2, ax3 will be None.
+    """
 
     ax1.clear()
     m, b, R2 = linear_regression(fluxes[i].pruned_times, fluxes[i].pruned_samples)
     at = AnchoredText(
-        r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=15), frameon=True, loc='upper center')
+        r"$R^{2}$ = " + str(round(R2, 5)), prop=dict(size=12), frameon=True, loc='upper center')
     at.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     at.patch.set_alpha(0.5)
     ax1.add_artist(at)
@@ -323,23 +349,39 @@ def draw_plot(i, fluxes, fig, ax1, ax2, cid):
     ax2.plot(fluxes[i].pruned_times, fluxes[i].pruned_H2O, linewidth = 2.0)
     ax2.grid(True)
 
-    ax2.set(xlabel = "Time (s)")                 # x axis label
     ax2.set(ylabel = "H2O (ppm)")
 
+    if LICOR_GAS == 'co2':
+        ax3.clear()
+        ax3.plot(fluxes[i].pruned_times, fluxes[i].pruned_methane, linewidth = 2.0)
+        ax3.grid(True)
+
+        ax3.set(xlabel = "Time (s)")                 # x axis label
+        ax3.set(ylabel = "CH4 (ppb)")
+    else:
+        ax2.set(xlabel = "Time (s)")                 # x axis label
+
     fig.canvas.mpl_disconnect(cid)
-    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, cid))   # connect key press event  
+    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid))   # connect key press event
     fig.canvas.draw()
 
 
 # entry point for drawing the plots for the user to cut data
 def prune(fluxes):
     i = 0
-    fig, (ax1, ax2) = plt.subplots(2, 1)
-    fig.set_size_inches(9,6)
+    # Create figure and axes for plots. If LICOR_GAS == co2, create
+    # a third plot at the bottom for raw methane measurements.
+    if LICOR_GAS == 'co2':
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+        fig.set_size_inches(9, 7)
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        fig.set_size_inches(9,6)
+        ax3 = None
     cid = ''
     plt.grid(True)
     plt.ion()
-    draw_plot(i, fluxes, fig, ax1, ax2, cid)
+    draw_plot(i, fluxes, fig, ax1, ax2, ax3, cid)
     plt.show(block=False)
     while plt.get_fignums():
         fig.canvas.draw_idle()
@@ -383,6 +425,7 @@ def offsets(fluxes):
                 flux.pruned_times.insert(i, '')
                 flux.pruned_samples.insert(i, '')
                 flux.pruned_H2O.insert(i, '')
+                flux.pruned_methane.insert(i, '')
             cut_size += cut[1] + cut[0] + 1
 
         # calculate the offset at each index
