@@ -404,9 +404,9 @@ def flux_calculation(fluxes):
         if LICOR_GAS == "co2":
             flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)*(12/44)/1000)
         elif LICOR_GAS == 'ch4':
-            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000000)
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.016*1440)/(flux.surface_area)*(12/16)/1000)
         else:  # LICOR_GAS == 'n2o'
-            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)/1000000)
+            flux.flux = (flux.RoC*(vol/(0.0821*flux.temp))*(0.044*1440)/(flux.surface_area)/1000)
 
 
 # calculates cut offsets for the sake of reporting
