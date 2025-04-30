@@ -235,6 +235,23 @@ def input_data(field_data, licor_data):
     return fluxes
 
 
+def prune_list(data, time_L_index, time_R_index, time_L, time_R):
+    """
+    Shift the values in data by removing those within [time_L_index, time_R_index] while
+    keeping the data continuous. Achieve continuity by shifting all datapoints after
+    time_R_index by a delta equal to the gap between the last entry before and first entry
+    after the cut.
+    If the cut is at the boundary of the data (i.e. the cut isn't in the middle of the data),
+    the offset (delta) will be zero.
+    """
+    if time_L_index and time_R_index:
+        delta = data[time_L_index] - data[time_R_index]
+    else:
+        delta = 0
+
+    return data[: time_L] + [datapoint + delta for datapoint in data[time_R+1 :]]
+
+
 # process button press for plot
 def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid):
     sys.stdout.flush()
@@ -248,48 +265,21 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid):
 
         time_L_index = fluxes[i].pruned_times.index(time_L)
         time_R_index = fluxes[i].pruned_times.index(time_R)
-        
+
         if (time_R_index - time_L_index + 1) >= len(fluxes[i].pruned_times):
             print("Error! Can't cut entire data set, please narrow your selection with the two red cursors")
         else:
-            # if both indices exist, set samples delta as the gap between the last entry before and first entry after the cut
-            # this is for the sake of maintaining a linear relationship, it adds a fixed offset to each entry after the cut
-            # if the cut is at the boundary of the data, the offset will be set to zero (i.e. the cut isn't in the middle of the data)
-            if time_L_index and time_R_index:
-                samples_delta = fluxes[i].pruned_samples[time_L_index] - fluxes[i].pruned_samples[time_R_index]
-            else:
-                samples_delta = 0
-
-            # obtain time offset as the time elapsed by the cut
-            # for the sake of maintaining a linear relationship, adds a fixed offset
-            time_delta = time_R - time_L
+            # track the upper and lower bounds of each cut in a list
             fluxes[i].cuts.append([time_L_index, time_R_index])
 
-            times = []
-            samples = []
-            H2O = []
-            methane = []  # for raw methane measurements, only populated when LICOR_GAS == co2
+            # prune the time list to reflect the cut
+            fluxes[i].pruned_times = prune_list(fluxes[i].pruned_times, time_L_index, time_R_index, time_L, time_R)
 
-            # if entry is not in the cut, add it to a new set
-            for k in range(len(fluxes[i].pruned_times)):
-                if fluxes[i].pruned_times[k] < time_L:
-                    times.append(fluxes[i].pruned_times[k])
-                    samples.append(fluxes[i].pruned_samples[k])
-                    H2O.append(fluxes[i].pruned_H2O[k])
-                    if LICOR_GAS == 'co2':
-                        methane.append(fluxes[i].pruned_methane[k])
-                if fluxes[i].pruned_times[k] > time_R:
-                    times.append(fluxes[i].pruned_times[k] - time_delta)
-                    samples.append(fluxes[i].pruned_samples[k] + samples_delta)
-                    H2O.append(fluxes[i].pruned_H2O[k])
-                    if LICOR_GAS == 'co2':
-                        methane.append(fluxes[i].pruned_methane[k])
-            
-            # update flux pruned sets with cut sets
-            fluxes[i].pruned_times = times
-            fluxes[i].pruned_samples = samples
-            fluxes[i].pruned_H2O = H2O
-            fluxes[i].pruned_methane = methane
+            # prune the samples, H2O, and optionally methane to reflect the cut
+            fluxes[i].pruned_samples = prune_list(fluxes[i].pruned_samples, time_L_index, time_R_index, time_L, time_R)
+            fluxes[i].pruned_H2O = prune_list(fluxes[i].pruned_H2O, time_L_index, time_R_index, time_L, time_R)
+            if LICOR_GAS == 'co2':
+                fluxes[i].pruned_methane = prune_list(fluxes[i].pruned_methane, time_L_index, time_R_index, time_L, time_R)
 
             # refresh the plot
             draw_plot(i, fluxes, fig, ax1, ax2, ax3, cid)
