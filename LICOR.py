@@ -300,6 +300,10 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid):
             plt.close('all')
             return 0
         else:
+            ax1.clear()
+            ax2.clear()
+            if ax3:
+                ax3.clear()
             draw_plot(i + 1, fluxes, fig, ax1, ax2, ax3, cid)
         
     # left arrow key moves to the previous flux, or does nothing if at the beginning
