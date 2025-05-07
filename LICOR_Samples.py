@@ -180,8 +180,13 @@ def on_press(event, i, samples, line_L, line_R, LICOR, fig, ax1, ax2, ax3, cid):
             plt.close()
             return 0
         else:
+            ax1.clear()
+            ax2.clear()
+            if ax3:
+                ax3.clear()
             draw_plot(i + 1, samples, LICOR, fig, ax1, ax2, ax3, cid)
-        
+
+
     # left arrow key moves to the previous sample, or does nothing if at the beginning
     if event.key == 'left':
         if i != 0:
