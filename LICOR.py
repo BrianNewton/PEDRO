@@ -300,6 +300,10 @@ def on_press(event, i, fluxes, line_L, line_R, fig, ax1, ax2, ax3, cid):
             plt.close('all')
             return 0
         else:
+            ax1.clear()
+            ax2.clear()
+            if ax3:
+                ax3.clear()
             draw_plot(i + 1, fluxes, fig, ax1, ax2, ax3, cid)
         
     # left arrow key moves to the previous flux, or does nothing if at the beginning
@@ -437,7 +441,7 @@ def outputData(fluxes, site, date):
     worksheet = workbook.add_worksheet("Summary")
     worksheet.write_row(0, 0, ["Site:", site])
     worksheet.write_row(1, 0, ["Date:", date])
-    worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (C)", '', "RSQ", f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", f"m ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/sec])", f"Flux of {LICOR_GAS.upper()} {output_units[LICOR_GAS]}", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
+    worksheet.write_column(3, 0, ["Flux name", '', "Chamber volume (L)", "Air temp (K)", '', "RSQ", f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", f"m ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/sec])", f"Flux of {LICOR_GAS.upper()} {output_units[LICOR_GAS]}", "Data loss (%)", "Surface moisture", "Surface temperature", "PAR"])
     for i in range(len(fluxes)):
         vol = fluxes[i].surface_area * fluxes[i].chamber_height * 1000
         worksheet.write_column(3, i + 1, [fluxes[i].name , '', vol, fluxes[i].temp, '', fluxes[i].RSQ, fluxes[i].RoC, fluxes[i].RoC/60, fluxes[i].flux, fluxes[i].data_loss])
@@ -456,7 +460,7 @@ def outputData(fluxes, site, date):
             worksheet = workbook.add_worksheet(flux.name + " (%s)" %(str(worksheets[flux.name])))
         worksheet.write_row(0, 0, ["Name", flux.name])
         worksheet.write_row(1, 0, ["RSQ", flux.RSQ, '', '', "Chamber volume (L)", vol])
-        worksheet.write_row(2, 0, [f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", flux.RoC, '', '', "Air temp (C)", flux.temp])
+        worksheet.write_row(2, 0, [f"Rate of change ({LICOR_GAS.upper()} [{gas_units[LICOR_GAS]}/min])", flux.RoC, '', '', "Air temp (K)", flux.temp])
         worksheet.write_row(3, 0, [f"Flux of {LICOR_GAS.upper()} {output_units[LICOR_GAS]}", flux.flux])
         worksheet.write_row(4, 0, ["Data loss (%)", flux.data_loss])
 
