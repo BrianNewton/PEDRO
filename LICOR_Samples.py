@@ -15,8 +15,10 @@ import xlsxwriter
 from os.path import  join
 import PySimpleGUI as sg
 import traceback
+import statsmodels.api as sm
 
 
+LICOR_GAS = None
 
 # draggable lines for user cuts
 class draggable_lines:
@@ -69,13 +71,19 @@ class sample:
         self.end_time = nan                  # sample end time
         self.peak_start_time = float(time)   # peak start time
         self.peak_end_time = nan             # peak end time
-        self.times = []                 # FMA times between sample start and end times
-        self.concentrations_CH4 = []        # FMA concentrations between sample start and end times
+        self.times = []                 # Licor times between sample start and end times
+        self.concentrations_CH4 = []        # Licor concentrations between sample start and end times
         self.area_CH4 = nan                 # sample peak area
         self.CH4 = nan                  # sample CH4 concentration
         self.concentrations_CO2 = []
         self.area_CO2 = nan
         self.CO2 = nan
+        self.concentrations_N2O = []
+        self.area_N2O = nan
+        self.N2O = nan
+        self.concentrations_H2O = []
+        self.area_H2O = nan
+        self.H2O = nan
 
 
 def input_data(sample_data, LICOR_data):
@@ -87,6 +95,8 @@ def input_data(sample_data, LICOR_data):
     LICOR_time_regex = r"^TIME"
     LICOR_CH4_regex = r"CH4"
     LICOR_CO2_regex = r"CO2"
+    LICOR_N2O_regex = r"N2O"
+    LICOR_H2O_regex = r"H2O"
 
     try:
         f = open(LICOR_data, "r")
@@ -101,6 +111,10 @@ def input_data(sample_data, LICOR_data):
                 LICOR_CH4_index = i
             if re.search(LICOR_CO2_regex, x[i], re.IGNORECASE):
                 LICOR_CO2_index = i
+            if re.search(LICOR_N2O_regex, x[i], re.IGNORECASE):
+                LICOR_N2O_index = i
+            if re.search(LICOR_H2O_regex, x[i], re.IGNORECASE):
+                LICOR_H2O_index = i
 
         for line in f:
             x = line.replace('\t', ',').replace(';', ',').split(',')
@@ -109,7 +123,10 @@ def input_data(sample_data, LICOR_data):
             if x[0] == "DATA":
                 time_match = re.search(time_regex, x[LICOR_time_index])
                 time = float(time_match[1])*3600 + float(time_match[2])*60 + float(time_match[3])
-                LICOR.append([time, float(x[LICOR_CH4_index])/1000, x[LICOR_CO2_index]])
+                if LICOR_GAS == "CO2/CH4":
+                    LICOR.append([time, float(x[LICOR_CH4_index])/1000, x[LICOR_CO2_index], x[LICOR_H2O_index]])
+                else:
+                    LICOR.append([time, float(x[LICOR_N2O_index])/1000, x[LICOR_H2O_index]])
     except:
         raise Exception("Error processing LICOR data file, please ensure you're using the original unedited file")
 
@@ -135,8 +152,6 @@ def input_data(sample_data, LICOR_data):
 # add end time to each sample
 def process_samples(samples, LICOR):
 
-    time_regex = r"(\d*):(\d*):(\d*)"
-
     for i in range(len(samples)):
         if i < len(samples) - 1:
             if samples[i + 1].peak_start_time - samples[i].peak_start_time > 180:
@@ -152,7 +167,7 @@ def process_samples(samples, LICOR):
         
 
 # process button press for plot
-def on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid):
+def on_press(event, i, samples, line_L, line_R, LICOR, fig, ax1, ax2, ax3, cid):
     sys.stdout.flush()
 
     # when changing samples, obtain newly set start and end times from the positions of the user set bounds
@@ -165,18 +180,23 @@ def on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid):
             plt.close()
             return 0
         else:
-            draw_plot(i + 1, samples, LICOR, fig, ax, cid)
-            #draw_plot(i + 1, samples, FMA)
-        
+            ax1.clear()
+            ax2.clear()
+            if ax3:
+                ax3.clear()
+            draw_plot(i + 1, samples, LICOR, fig, ax1, ax2, ax3, cid)
+
+
     # left arrow key moves to the previous sample, or does nothing if at the beginning
     if event.key == 'left':
         if i != 0:
-            draw_plot(i - 1, samples, LICOR, fig, ax, cid)
+            draw_plot(i - 1, samples, LICOR, fig, ax1, ax2, ax3, cid)
 
 
 #draw plot for i-th sample
-def draw_plot(i, samples, LICOR, fig, ax, cid):
-    
+def draw_plot(i, samples, LICOR, fig, ax1, ax2, ax3, cid):
+    """If LICOR_GAS == N2O, ax3 will be None"""
+
     # if sample hasn't already been processed
     if len(samples[i].times) == 0:
 
@@ -188,45 +208,84 @@ def draw_plot(i, samples, LICOR, fig, ax, cid):
                 LICOR_start = j
             if float(samples[i].peak_end_time) - float(LICOR[j][0]) <= 0 and LICOR_end == 0:
                 LICOR_end = j
-        for k in range(math.floor(LICOR_start), math.ceil(LICOR_end)):
-            samples[i].times.append(float(LICOR[k][0]))
-            samples[i].concentrations_CH4.append(float(LICOR[k][1]))
-            samples[i].concentrations_CO2.append(float(LICOR[k][2]))
 
-    fig.clear()
-    ax = fig.add_subplot()
-    plt.plot(samples[i].times, samples[i].concentrations_CH4, linewidth = 2.0)
+        if LICOR_GAS == "CO2/CH4":
+            for k in range(math.floor(LICOR_start), math.ceil(LICOR_end)):
+                samples[i].times.append(float(LICOR[k][0]))
+                samples[i].concentrations_CH4.append(float(LICOR[k][1]))
+                samples[i].concentrations_CO2.append(float(LICOR[k][2]))
+                samples[i].concentrations_H2O.append(float(LICOR[k][3]))     
+        else:
+            for k in range(math.floor(LICOR_start), math.ceil(LICOR_end)):
+                samples[i].times.append(float(LICOR[k][0]))
+                samples[i].concentrations_N2O.append(float(LICOR[k][1]))
+                samples[i].concentrations_H2O.append(float(LICOR[k][2])) 
 
-    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())     # right draggable boundary line
+    ax1.clear()
+    ax1.grid(True)
+    ax2.clear()
+    ax2.grid(True)
+
+    if LICOR_GAS == "CO2/CH4":
+        ax1.plot(samples[i].times, samples[i].concentrations_CH4, linewidth = 2.0)
+        ax1.set(ylabel="CH4 concentration (ppm)")  # y axis label
+
+        ax2.plot(samples[i].times, samples[i].concentrations_CO2 , linewidth = 2.0)
+        ax2.set(ylabel="CO2 concentration (ppm)")
+
+        ax3.clear()
+        ax3.grid(True)
+        ax3.plot(samples[i].times, samples[i].concentrations_H2O , linewidth = 2.0)
+        ax3.set(ylabel="H2O concentration (ppm)")  # y axis label
+        ax3.set(xlabel="Time (s)")  # x axis label
+
+        num_samples = len(samples[i].concentrations_CH4)
+    else:
+        ax1.plot(samples[i].times, samples[i].concentrations_N2O, linewidth = 2.0)
+        ax1.set(ylabel="N2O concentration (ppm)")  # y axis label
+
+        ax2.plot(samples[i].times, samples[i].concentrations_H2O , linewidth = 2.0)
+        ax2.set(ylabel="H2O concentration (ppm)")  # y axis label 
+        ax2.set(xlabel="Time (s)")
+
+        num_samples = len(samples[i].concentrations_N2O)
+
+    line_L = draggable_lines(ax1, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + num_samples], ax1.get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax1, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + num_samples], ax1.get_ylim())     # right draggable boundary line
 
     # if currently on the last sample, change header information, otherwise set title to user controls
     if i == len(samples) - 1:
-        ax.set(title = samples[i].name + "\nLast sample! Press right arrow to finish\nUse the mouse to drag peak bounds")
+        ax1.set(title = samples[i].name + "\nLast sample! Press right arrow to finish\nUse the mouse to drag peak bounds")
     else:      
-        ax.set(title = samples[i].name + '\nUse arrow keys to navigate samples\nUse the mouse to drag peak bounds')
+        ax1.set(title = samples[i].name + '\nUse arrow keys to navigate samples\nUse the mouse to drag peak bounds')
 
-    ax.set(xlabel = "Time (s)")                 # x axis label
-    ax.set(ylabel = "CH4 concentration (ppm)")  # y axis label
     fig.canvas.mpl_disconnect(cid)
-    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid))   # connect key press event  
-    ax.grid(True)
+    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, LICOR, fig, ax1, ax2, ax3, cid))   # connect key press event
     fig.canvas.draw()
 
 
 # obtains peak bounds from user interactive plots
 def obtain_peaks(samples, LICOR):
     i = 0
-    fig, ax = plt.subplots()
-    fig.set_size_inches(6,6)
+    # Create figure and axes for plots. If LICOR_GAS == CO2/CH4, create
+    # a third plot at the bottom for raw CO2 measurements.
+    if LICOR_GAS == 'CO2/CH4':
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+        fig.set_size_inches(9, 7)
+        sample_concentrations = samples[i].concentrations_CH4
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        fig.set_size_inches(9,6)
+        ax3 = None
+        sample_concentrations = samples[i].concentrations_N2O 
 
-    line_L = draggable_lines(ax, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())   # left draggable boundary line
-    line_R = draggable_lines(ax, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(samples[i].concentrations_CH4)], plt.gca().get_ylim())     # right draggable boundary line
+    line_L = draggable_lines(ax1, samples[i].peak_start_time, [samples[i].start_time, samples[i].start_time + len(sample_concentrations)], plt.gca().get_ylim())   # left draggable boundary line
+    line_R = draggable_lines(ax1, samples[i].peak_end_time, [samples[i].start_time, samples[i].start_time + len(sample_concentrations)], plt.gca().get_ylim())     # right draggable boundary line
 
-    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, LICOR, fig, ax, cid))   # connect key press event
+    cid = fig.canvas.mpl_connect('key_press_event', lambda event: on_press(event, i, samples, line_L, line_R, LICOR, fig, ax1, ax2, ax3, cid))   # connect key press event
     plt.grid(True)
     plt.ion()
-    draw_plot(i, samples, LICOR, fig, ax, cid)
+    draw_plot(i, samples, LICOR, fig, ax1, ax2, ax3, cid)
     plt.show(block=False)
     while plt.get_fignums():
         fig.canvas.draw_idle()
@@ -234,15 +293,15 @@ def obtain_peaks(samples, LICOR):
 
 
 # using the new user set start and end times, trim all extraneous data outside these bounds
-# also cut out samples from overall FMA data set, for random baseline sampling used to generate linear model
+# also cut out samples from overall Licor data set, for random baseline sampling used to generate linear model
 def standardize(samples, LICOR):
     for j in range(len(samples)):
-        LICOR_start = 0           # sample start index within sample time and concentration sets (not FMA data indices)
-        LICOR_end = 0             # sample end index within sample time and concentration sets (not FMA data incides)
-        LICOR_cut_L = 0           # sample start index within FMA data set
-        LICOR_cut_R = 0           # sample end index within FMA data set
-        start_temp = np.inf     # temporary variable for finding closest FMA time to user set start time
-        end_temp = np.inf       # temporary variable for finding closest FMA time to user set end time
+        LICOR_start = 0           # sample start index within sample time and concentration sets (not Licor data indices)
+        LICOR_end = 0             # sample end index within sample time and concentration sets (not Licor data incides)
+        LICOR_cut_L = 0           # sample start index within Licor data set
+        LICOR_cut_R = 0           # sample end index within Licor data set
+        start_temp = np.inf     # temporary variable for finding closest Licor time to user set start time
+        end_temp = np.inf       # temporary variable for finding closest Licor time to user set end time
 
         # trims sample time and concentration sets
         #TODO: This can be smarter, will come back later
@@ -253,14 +312,15 @@ def standardize(samples, LICOR):
             if abs(samples[j].peak_end_time - samples[j].times[i]) < end_temp:
                 end_temp = abs(samples[j].peak_end_time - samples[j].times[i])
                 LICOR_end = i
-        #/TODO
 
         # trim sample times and concentrations 
         samples[j].times = samples[j].times[LICOR_start: LICOR_end + 1]
-        samples[j].concentrations_CH4 = samples[j].concentrations_CH4[LICOR_start: LICOR_end + 1]
-        samples[j].concentrations_CO2 = samples[j].concentrations_CO2[LICOR_start: LICOR_end + 1]
-
-        # cuts out sample from overall FMA data (used for baseline sampling in generating linear model)
+        if LICOR_GAS == "CO2/CH4":
+            samples[j].concentrations_CH4 = samples[j].concentrations_CH4[LICOR_start: LICOR_end + 1]
+            samples[j].concentrations_CO2 = samples[j].concentrations_CO2[LICOR_start: LICOR_end + 1]
+        else:
+            samples[j].concentrations_N2O = samples[j].concentrations_N2O[LICOR_start: LICOR_end + 1]
+        # cuts out sample from overall Licor data (used for baseline sampling in generating linear model)
         for k in range(len(LICOR)):
             if float(LICOR[k][0]) == samples[j].times[0]:
                 LICOR_cut_L = k
@@ -273,27 +333,40 @@ def standardize(samples, LICOR):
 def peak_areas(samples):
     for i in range(len(samples)):
 
-        # determines whether the sample has a positive or negative peak based on the value of the middle relative to the beginning
-        if samples[i].concentrations_CH4[int(len(samples[i].concentrations_CH4)/2)] < samples[i].concentrations_CH4[0]: # negative peak
-            baseline_CH4 = max(samples[i].concentrations_CH4)
-        else: # positive peak
-            baseline_CH4 = min(samples[i].concentrations_CH4)
-        area_CH4 = 0
+        if LICOR_GAS == "CO2/CH4":
+            # determines whether the sample has a positive or negative peak based on the value of the middle relative to the beginning
+            if samples[i].concentrations_CH4[int(len(samples[i].concentrations_CH4)/2)] < samples[i].concentrations_CH4[0]: # negative peak
+                baseline_CH4 = max(samples[i].concentrations_CH4)
+            else: # positive peak
+                baseline_CH4 = min(samples[i].concentrations_CH4)
+            area_CH4 = 0
 
-        if samples[i].concentrations_CO2[int(len(samples[i].concentrations_CO2)/2)] < samples[i].concentrations_CO2[0]: # negative peak
-            baseline_CO2 = max(samples[i].concentrations_CO2)
-        else: # positive peak
-            baseline_CO2 = min(samples[i].concentrations_CO2)
-        area_CO2 = 0
+            if samples[i].concentrations_CO2[int(len(samples[i].concentrations_CO2)/2)] < samples[i].concentrations_CO2[0]: # negative peak
+                baseline_CO2 = max(samples[i].concentrations_CO2)
+            else: # positive peak
+                baseline_CO2 = min(samples[i].concentrations_CO2)
+            area_CO2 = 0
 
-        # integrate concentration data points with respect to time
-        for j in range(len(samples[i].times)):
-            if j < len(samples[i].times) - 1:
-                area_CH4 = area_CH4 + (samples[i].concentrations_CH4[j] - baseline_CH4)*(samples[i].times[j + 1] - samples[i].times[j])
-                area_CO2 = area_CO2 + (samples[i].concentrations_CO2[j] - baseline_CO2)*(samples[i].times[j + 1] - samples[i].times[j])
-        samples[i].area_CH4 = area_CH4
-        samples[i].area_CO2 = area_CO2
+            # integrate concentration data points with respect to time
+            for j in range(len(samples[i].times)):
+                if j < len(samples[i].times) - 1:
+                    area_CH4 = area_CH4 + (samples[i].concentrations_CH4[j] - baseline_CH4)*(samples[i].times[j + 1] - samples[i].times[j])
+                    area_CO2 = area_CO2 + (samples[i].concentrations_CO2[j] - baseline_CO2)*(samples[i].times[j + 1] - samples[i].times[j])
+            samples[i].area_CH4 = area_CH4
+            samples[i].area_CO2 = area_CO2
+        else:
+             # determines whether the sample has a positive or negative peak based on the value of the middle relative to the beginning
+            if samples[i].concentrations_N2O[int(len(samples[i].concentrations_N2O)/2)] < samples[i].concentrations_N2O[0]: # negative peak
+                baseline_N2O = max(samples[i].concentrations_N2O)
+            else: # positive peak
+                baseline_N2O = min(samples[i].concentrations_N2O)
+            area_N2O = 0
 
+            # integrate concentration data points with respect to time
+            for j in range(len(samples[i].times)):
+                if j < len(samples[i].times) - 1:
+                    area_N2O = area_N2O + (samples[i].concentrations_N2O[j] - baseline_N2O)*(samples[i].times[j + 1] - samples[i].times[j])
+            samples[i].area_N2O = area_N2O
 
 # performs linear regression to generate linear relationship between peak areas and CH4 concentration
 def linear_model(samples, LICOR):
@@ -303,11 +376,13 @@ def linear_model(samples, LICOR):
     X_CO2 = []
     Y_CO2 = []
 
-    
+    X_N2O = []
+    Y_N2O = []
+
     one_ppm_regex = r"1\s?ppm"
     five_ppm_regex = r"5\s?ppm"
     fifty_ppm_regex = r"50\s?ppm"
-
+    thousand_ppm_regex = r"10000\s?ppm"
 
     # extracts standards from samples
     for i in range(len(samples)):
@@ -318,12 +393,18 @@ def linear_model(samples, LICOR):
             Y_CO2.append(307)
             X_CO2.append(samples[i].area_CO2)
 
+            Y_N2O.append(0.0890)
+            X_N2O.append(samples[i].area_N2O)
+
         if re.search(five_ppm_regex, samples[i].name):
             Y_CH4.append(5)
             X_CH4.append(samples[i].area_CH4)
 
             Y_CO2.append(100)
             X_CO2.append(samples[i].area_CO2)
+
+            Y_N2O.append(1)
+            X_N2O.append(samples[i].area_N2O)
 
         if re.search(fifty_ppm_regex, samples[i].name):
             Y_CH4.append(50.6)
@@ -332,87 +413,41 @@ def linear_model(samples, LICOR):
             Y_CO2.append(497)
             X_CO2.append(samples[i].area_CO2)
 
-    # for each set of standards, generates a random non-sample baseline data point
-    numStandards = len(X_CH4)
+            Y_N2O.append(2)
+            X_N2O.append(samples[i].area_N2O)
 
-    if numStandards == 0:
-        return(1, 2.1, 0, 1, 2.1, 0)
+        if re.search(thousand_ppm_regex, samples[i].name):
+            Y_CH4.append(1000)
+            X_CH4.append(samples[i].area_CH4)
 
-    for i in range(numStandards):
-        rand = random.randint(0, len(LICOR))
-        while math.isnan(LICOR[rand][1]):
-            rand = random.randint(0, len(LICOR))
-
-        Y_CH4.append(float(LICOR[rand][1]))
-        X_CH4.append(0)
-
-        Y_CO2.append(float(LICOR[rand][2]))
-        X_CO2.append(0)
-
-    # simple linear regression
-    sumX_CH4 = sum(X_CH4)
-    sumY_CH4 = sum(Y_CH4)
-    meanX_CH4 = sumX_CH4/len(X_CH4)
-    meanY_CH4 = sumY_CH4/len(Y_CH4)
-
-    sumX_CO2 = sum(X_CO2)
-    sumY_CO2 = sum(Y_CO2)
-    meanX_CO2 = sumX_CO2/len(X_CO2)
-    meanY_CO2 = sumY_CO2/len(Y_CO2)
+            Y_CO2.append(5008)
+            X_CO2.append(samples[i].area_CO2)
 
 
+    def statsmodels_linear_regression(X, Y):
+        X = np.array(X).reshape(-1, 1)  # reshape for sklearn
+        Y = np.array(Y)
 
-    SSx_CH4 = 0 # sum of squares
-    SP_CH4 = 0  # sum of products
+        X2 = sm.add_constant(X)  # required to add a constants column in order to get line intercept
+        model = sm.OLS(Y, X2).fit()
 
-    SSx_CO2 = 0
-    SP_CO2 = 0
+        b = model.params[0]
+        m = model.params[1]
+        p = model.pvalues[1]  # pvalues[0] is p-value of the intercept
+        F = model.fvalue
+        R2 = model.rsquared
 
-    for i in range(len(X_CH4)):
-        SSx_CH4 = SSx_CH4 + (X_CH4[i] - meanX_CH4) ** 2
-        SP_CH4 = SP_CH4 + (X_CH4[i] - meanX_CH4)*(Y_CH4[i] - meanY_CH4)
+        return m, b, R2, p, F
 
-        SSx_CO2 = SSx_CO2 + (X_CO2[i] - meanX_CO2) ** 2
-        SP_CO2 = SP_CO2 + (X_CO2[i] - meanX_CO2)*(Y_CO2[i] - meanY_CO2)
-
-    # generates slope and intercept based on standards and baseline samples
-    m_CH4 = SP_CH4/SSx_CH4
-    b_CH4 = meanY_CH4 - m_CH4 * meanX_CH4
-
-    m_CO2 = SP_CO2/SSx_CO2
-    b_CO2 = meanY_CO2 - m_CO2 * meanX_CO2
-
-    SS_res_CH4 = 0
-    SS_t_CH4 = 0
-
-    SS_res_CO2 = 0
-    SS_t_CO2 = 0
-
-    for i in range(len(X_CH4)):
-        SS_res_CH4 = SS_res_CH4 + (Y_CH4[i] - X_CH4[i]*m_CH4 - b_CH4) ** 2
-        SS_t_CH4 = SS_t_CH4 + (Y_CH4[i] - meanY_CH4) ** 2
-
-        SS_res_CO2 = SS_res_CO2 + (Y_CO2[i] - X_CO2[i]*m_CO2 - b_CO2) ** 2
-        SS_t_CO2 = SS_t_CO2 + (Y_CO2[i] - meanY_CO2) ** 2
-    
-    R2_CH4 = 1 - SS_res_CH4/SS_t_CH4    # coefficient of determination
-    R2_CO2 = 1 - SS_res_CO2/SS_t_CO2
-
-    print(m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2)
-    return(m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2)
-
-
-# For each sample uses the determined linear model to determine sample CH4 concentration
-def concentrations(samples, m_CH4, b_CH4, m_CO2, b_CO2):
-    for i in range(len(samples)):
-        CH4 = samples[i].area_CH4 * m_CH4 + b_CH4
-        CO2 = samples[i].area_CO2 * m_CO2 + b_CO2
-        samples[i].CH4 = CH4
-        samples[i].CO2 = CO2
-
+    if LICOR_GAS == "CO2/CH4":
+        # m_CH4, b_CH4, R2_CH4, p_CH4, F_CH4 = statsmodels_linear_regression(X_CH4, Y_CH4)
+        # m_CO2, b_CO2, R2_CO2, p_CO2, F_CO2 = statsmodels_linear_regression(X_CO2, Y_CO2)
+        return *statsmodels_linear_regression(X_CH4, Y_CH4), *statsmodels_linear_regression(X_CO2, Y_CO2)
+    else:
+        return statsmodels_linear_regression(X_N2O, Y_N2O)
 
 # outputs data to csv file
-def outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2):
+def outputData_CO2_CH4(samples, m_CH4, b_CH4, R2_CH4, p_CH4, F_CH4, m_CO2, b_CO2, R2_CO2, p_CO2, F_CO2):
     out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
     workbook = xlsxwriter.Workbook(out)
 
@@ -422,19 +457,18 @@ def outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2):
     worksheet.write_row(3, 0, ["m:", m_CH4, "", "m", m_CO2])
     worksheet.write_row(4, 0, ["b:", b_CH4, "", "b", b_CO2])
     worksheet.write_row(5, 0, ["R2:", R2_CH4, "", "R2", R2_CO2])
-    worksheet.write_row(7, 0, ["Sample name", "Start time", "End time", "CH4 peak area", "CH4 concentration (ppm)", "CO2 peak area", "CO2 concentration (ppm)"])
+    worksheet.write_row(6, 0, ["p:", p_CH4, "", "p", p_CO2])
+    worksheet.write_row(7, 0, ["F:", F_CH4, "", "F", F_CO2])
+    worksheet.write_row(9, 0, ["Sample name", "Start time", "End time", "CH4 peak area", "CH4 concentration (ppm)", "CO2 peak area", "CO2 concentration (ppm)"])
 
-    row = 8
-
-    longest_name = 0
-
+    row = 10
     for i in range(len(samples)):
-        if len(samples[i].name) > longest_name:
-            longest_name = len(samples[i].name)
         samples[i].peak_start_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_start_time // 60) // 60), int((samples[i].peak_start_time // 60) % 60), int((samples[i].peak_start_time % 60))) 
         samples[i].peak_end_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_end_time // 60) // 60), int((samples[i].peak_end_time // 60) % 60), int(samples[i].peak_end_time % 60)) 
-        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area_CH4, "=D{}*B4+B5".format(str(row + 1)), samples[i].area_CO2, "=D{}*E4+E5".format(str(row + 1))])
+        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area_CH4, "=D{}*B4+B5".format(str(row + 1)), samples[i].area_CO2, "=F{}*E4+E5".format(str(row + 1))])
         row += 1
+
+    longest_name = max([len(s.name) for s in samples])
 
     worksheet.set_column(0, 0, longest_name)
     worksheet.set_column(1, 1, len("Start time"))
@@ -446,6 +480,41 @@ def outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2):
 
     workbook.close()
     return out
+
+def outputData_N2O(samples, m_N2O, b_N2O, R2_N2O, p_N2O, F_N2O):
+    out = tkinter.filedialog.asksaveasfilename(defaultextension='.xlsx')
+    workbook = xlsxwriter.Workbook(out)
+
+    worksheet = workbook.add_worksheet("Results")
+    worksheet.write_row(0, 0, ["Date: ", str(datetime.datetime.now().replace(microsecond=0))])
+    worksheet.write_row(2, 0, ["Linear model (N2O):", ""])
+    worksheet.write_row(3, 0, ["m:", m_N2O, ""])
+    worksheet.write_row(4, 0, ["b:", b_N2O, ""])
+    worksheet.write_row(5, 0, ["R2:", R2_N2O, ""])
+    worksheet.write_row(6, 0, ["p:", p_N2O, ""])
+    worksheet.write_row(7, 0, ["F:", F_N2O, ""])
+    worksheet.write_row(9, 0, ["Sample name", "Start time", "End time", "N2O peak area", "N2O concentration (ppm)"])
+
+    row = 10
+    for i in range(len(samples)):
+        samples[i].peak_start_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_start_time // 60) // 60), int((samples[i].peak_start_time // 60) % 60), int((samples[i].peak_start_time % 60))) 
+        samples[i].peak_end_time = "{:02d}:{:02d}:{:02d}".format(int((samples[i].peak_end_time // 60) // 60), int((samples[i].peak_end_time // 60) % 60), int(samples[i].peak_end_time % 60)) 
+        worksheet.write_row(row, 0, [samples[i].name, samples[i].peak_start_time, samples[i].peak_end_time, samples[i].area_N2O, "=D{}*B4+B5".format(str(row + 1))])
+        row += 1
+
+    longest_name = max([len(s.name) for s in samples])
+
+    worksheet.set_column(0, 0, longest_name)
+    worksheet.set_column(1, 1, len("Start time"))
+    worksheet.set_column(2, 2, len("End time"))
+    worksheet.set_column(3, 3, len("N2O peak area"))
+    worksheet.set_column(4, 4, len("N2O concentration (ppm)"))
+
+    workbook.close()
+    return out
+
+
+
 
 
 #########################################################################################################################
@@ -460,6 +529,7 @@ def LICOR_Samples():
         [sg.Text("", background_color='#01A100')],
         [sg.Text('Sample data file: (.csv, .txt)', size=(21, 1), background_color='#01A100'), sg.Input(key='-SAMPLES-'), sg.FileBrowse()],
         [sg.Text('LICOR data file: (.csv, .txt, .data)', size=(21, 1), background_color='#01A100'), sg.Input(key='-LICOR-'), sg.FileBrowse()],
+        [sg.Text('Gas to analyze:', size=(15, 1), background_color='#01A100'), sg.Radio('CO2/CH4', 'RADIO2', enable_events=True, default=False, key='-CO2/CH4-', background_color='#01A100'), sg.Radio('N2O', 'RADIO2',enable_events=True, default=True, key='-N2O-', background_color='#01A100')],
         [sg.Text("", background_color='#01A100')],
         [sg.Submit(), sg.Cancel()]]
 
@@ -487,6 +557,12 @@ def LICOR_Samples():
         sample_data = values['-SAMPLES-']
         LICOR_data = values['-LICOR-']
 
+        global LICOR_GAS
+        if values['-CO2/CH4-']:
+            LICOR_GAS = 'CO2/CH4'
+        else:
+            LICOR_GAS = 'N2O'
+
         try:
             print("Reading input files")
             samples, LICOR = input_data(sample_data, LICOR_data)
@@ -504,13 +580,24 @@ def LICOR_Samples():
             peak_areas(samples)
 
             print("Generating linear model")
-            m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2 = linear_model(samples, LICOR)
 
-            print("Calculating concentrations")
-            concentrations(samples, m_CH4, b_CH4, m_CO2, b_CO2)
+            if LICOR_GAS == "CO2/CH4":
+                m_CH4, b_CH4, R2_CH4, p_CH4, F_CH4, m_CO2, b_CO2, R2_CO2, p_CO2, F_CO2 = linear_model(samples, LICOR)
+                print("Calculating concentrations")
+                for i in range(len(samples)):
+                    samples[i].CH4 = samples[i].area_CH4 * m_CH4 + b_CH4
+                    samples[i].CO2 = samples[i].area_CO2 * m_CO2 + b_CO2
 
-            print("Outputting data")
-            out = outputData(samples, m_CH4, b_CH4, R2_CH4, m_CO2, b_CO2, R2_CO2) 
+                print("Outputting data")
+                outputData_CO2_CH4(samples, m_CH4, b_CH4, R2_CH4, p_CH4, F_CH4, m_CO2, b_CO2, R2_CO2, p_CO2, F_CO2)
+            else:
+                m_N2O, b_N2O, R2_N2O, p_N2O, F_N2O = linear_model(samples, LICOR)
+                print("Calculating concentrations")
+                for i in range(len(samples)):
+                    samples[i].N2O = samples[i].area_N2O * m_N2O + b_N2O
+
+                print("Outputting data")
+                outputData_N2O(samples, m_N2O, b_N2O, R2_N2O, p_N2O, F_N2O)
 
         except Exception as e:
             window.close()
