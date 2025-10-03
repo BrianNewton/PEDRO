@@ -1,10 +1,16 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-- family-names: "Brian"
-  given-names: "Newton"
+- family-names: "Newton"
+  given-names: "Brian"
   orcid: "https://orcid.org/0000-0002-9515-1674"
+- family-names: "Hunter"
+  given-names: "Miranda"
+  orcid: "https://orcid.org/0009-0002-2989-5998"
+- family-names: "Hunter"
+  given-names: "Emily"
+  orcid: "https://orcid.org/0000-0002-5705-0717"
 title: "PEDRO - Peatland Equipment Data Re-organizer"
-version: 1.0.0
-date-released: 2023-05-26
+version: 1.1.0
+date-released: 2025-10-03
 url: "https://github.com/BrianNewton/PEDRO"
